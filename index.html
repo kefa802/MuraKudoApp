@@ -3,47 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NPB 12球団 全選手名鑑 V1.05.1</title>
+    <title>NPB DIRECTORY V1.05.2</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .giants { border-left-color: #ff6600; }
-        .hawks { border-left-color: #f6ca06; }
-        .tigers { border-left-color: #ffe200; }
-        .carp { border-left-color: #ff0000; }
-        .baystars { border-left-color: #005596; }
-        .dragons { border-left-color: #002a86; }
-        .swallows { border-left-color: #004631; }
-        .buffaloes { border-left-color: #b19962; }
-        .marines { border-left-color: #221815; }
-        .fighters { border-left-color: #006298; }
-        .eagles { border-left-color: #870011; }
-        .lions { border-left-color: #003567; }
+        .giants { border-left: 6px solid #ff6600; }
+        .hawks { border-left: 6px solid #f6ca06; }
+        .tigers { border-left: 6px solid #ffe200; }
+        .carp { border-left: 6px solid #ff0000; }
+        .baystars { border-left: 6px solid #005596; }
+        .dragons { border-left: 6px solid #002a86; }
+        .swallows { border-left: 6px solid #004631; }
+        .buffaloes { border-left: 6px solid #b19962; }
+        .marines { border-left: 6px solid #221815; }
+        .fighters { border-left: 6px solid #006298; }
+        .eagles { border-left: 6px solid #870011; }
+        .lions { border-left: 6px solid #003567; }
         
-        /* 成績表テーブルのスタイル */
-        .stats-table-container { overflow-x: auto; background: #1a1a1a; border-radius: 12px; margin-top: 10px; border: 1px solid #333; }
-        table.wikitable { width: 100%; border-collapse: collapse; font-size: 11px; }
-        table.wikitable th { background: #333; color: #fbbf24; padding: 8px; border: 1px solid #444; }
-        table.wikitable td { padding: 8px; border: 1px solid #333; text-align: center; color: #ccc; }
-        table.wikitable tr:nth-child(even) { background: #222; }
-        .loading-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+        /* 成績表の強制整形 */
+        .stats-wrapper { overflow-x: auto; background: #111; border-radius: 12px; }
+        .stats-wrapper table { width: 100%; border-collapse: collapse; font-size: 10px; min-width: 600px; }
+        .stats-wrapper th, .stats-wrapper td { border: 1px solid #333; padding: 8px 4px; text-align: center; }
+        .stats-wrapper th { background: #222; color: #fbbf24; }
     </style>
 </head>
-<body class="bg-black text-white">
+<body class="bg-black text-white font-sans">
 
-    <div id="list-page">
+    <div id="list-page" class="min-h-screen">
         <header class="p-4 bg-zinc-900 sticky top-0 z-50 border-b border-zinc-800 shadow-2xl">
             <h1 class="text-lg font-black italic text-center tracking-tighter text-yellow-500">NPB COMPLETE DIRECTORY</h1>
             <div class="flex overflow-x-auto gap-2 mt-4 no-scrollbar pb-1">
-                <button onclick="changeTeam('読売ジャイアンツ', 'giants')" class="flex-none px-4 py-2 bg-[#ff6600] text-black rounded font-bold text-xs shadow-lg">巨人</button>
+                <button onclick="changeTeam('読売ジャイアンツ', 'giants')" class="flex-none px-4 py-2 bg-[#ff6600] text-black rounded font-bold text-xs">巨人</button>
                 <button onclick="changeTeam('福岡ソフトバンクホークス', 'hawks')" class="flex-none px-4 py-2 bg-[#f6ca06] text-black rounded font-bold text-xs">SB</button>
                 <button onclick="changeTeam('阪神タイガース', 'tigers')" class="flex-none px-4 py-2 bg-[#ffe200] text-black rounded font-bold text-xs">阪神</button>
                 <button onclick="changeTeam('広島東洋カープ', 'carp')" class="flex-none px-4 py-2 bg-[#ff0000] text-white rounded font-bold text-xs">広島</button>
                 <button onclick="changeTeam('横浜DeNAベイスターズ', 'baystars')" class="flex-none px-4 py-2 bg-[#005596] text-white rounded font-bold text-xs">横浜</button>
                 <button onclick="changeTeam('中日ドラゴンズ', 'dragons')" class="flex-none px-4 py-2 bg-[#002a86] text-white rounded font-bold text-xs">中日</button>
                 <button onclick="changeTeam('東京ヤクルトスワローズ', 'swallows')" class="flex-none px-4 py-2 bg-[#004631] text-white rounded font-bold text-xs">ヤクルト</button>
-                <button onclick="changeTeam('オリックス・バファローズ', 'buffaloes')" class="flex-none px-4 py-2 bg-[#b19962] text-black rounded font-bold text-xs">オリックス</button>
+                <button onclick="changeTeam('オリックス・バファローズ', 'buffaloes')" class="flex-none px-4 py-2 bg-[#b19962] text-black rounded font-bold text-xs">オリ</button>
                 <button onclick="changeTeam('千葉ロッテマリーンズ', 'marines')" class="flex-none px-4 py-2 bg-[#221815] text-white rounded font-bold text-xs">ロッテ</button>
                 <button onclick="changeTeam('北海道日本ハムファイターズ', 'fighters')" class="flex-none px-4 py-2 bg-[#006298] text-white rounded font-bold text-xs">日ハム</button>
                 <button onclick="changeTeam('東北楽天ゴールデンイーグルス', 'eagles')" class="flex-none px-4 py-2 bg-[#870011] text-white rounded font-bold text-xs">楽天</button>
@@ -52,29 +49,28 @@
         </header>
 
         <main class="p-4 max-w-2xl mx-auto">
-            <h2 id="current-team-name" class="text-[10px] font-bold text-zinc-600 mb-4 tracking-[0.3em] uppercase text-center">SELECT A TEAM</h2>
+            <h2 id="current-team-name" class="text-[10px] font-bold text-zinc-600 mb-4 tracking-widest text-center uppercase">SELECT TEAM</h2>
             <div id="player-grid" class="grid grid-cols-1 gap-2"></div>
         </main>
     </div>
 
     <div id="detail-page" class="hidden min-h-screen bg-zinc-950 p-6 flex flex-col">
-        <button onclick="backToList()" class="mb-6 text-zinc-500 font-bold flex items-center gap-2 hover:text-white transition-colors">
-            <span class="text-2xl">←</span> BACK
+        <button onclick="backToList()" class="mb-6 text-zinc-500 font-bold flex items-center gap-2">
+            <span class="text-2xl">←</span> 戻る
         </button>
         <div class="max-w-2xl mx-auto w-full pb-20">
-            <div id="d-number" class="text-yellow-500 font-black text-2xl mb-1 italic"></div>
-            <h2 id="d-name" class="text-5xl font-black mb-6 italic tracking-tighter leading-none"></h2>
+            <h2 id="d-name" class="text-5xl font-black mb-1 italic tracking-tighter"></h2>
+            <div class="h-1 w-20 bg-yellow-500 mb-8"></div>
             
             <div class="space-y-8">
                 <section>
-                    <h3 class="text-[10px] font-bold text-zinc-500 mb-3 tracking-widest uppercase border-b border-zinc-800 pb-1">Summary</h3>
+                    <h3 class="text-[10px] font-bold text-zinc-500 mb-2 tracking-widest uppercase border-b border-zinc-800">Overview</h3>
                     <div id="d-wiki" class="text-sm leading-relaxed text-zinc-300">取得中...</div>
                 </section>
-
                 <section>
-                    <h3 class="text-[10px] font-bold text-zinc-500 mb-3 tracking-widest uppercase border-b border-zinc-800 pb-1">Annual Stats</h3>
-                    <div id="d-table" class="stats-table-container">
-                        <div class="p-8 text-center text-zinc-600 text-xs italic loading-pulse">成績データを解析しています...</div>
+                    <h3 class="text-[10px] font-bold text-zinc-500 mb-2 tracking-widest uppercase border-b border-zinc-800">Results Table</h3>
+                    <div id="d-table" class="stats-wrapper">
+                        <p class="p-8 text-center text-zinc-700 text-xs italic">解析中...</p>
                     </div>
                 </section>
             </div>
@@ -82,91 +78,65 @@
     </div>
 
     <script>
-        async function changeTeam(teamFullName, cssClass) {
+        async function changeTeam(teamName, cssClass) {
             const grid = document.getElementById('player-grid');
-            document.getElementById('current-team-name').innerText = teamFullName;
-            grid.innerHTML = '<div class="py-20 text-center loading-pulse text-zinc-700 font-bold">LOADING TEAM ROSTER...</div>';
+            document.getElementById('current-team-name').innerText = teamName;
+            grid.innerHTML = '<div class="py-20 text-center text-zinc-700 animate-pulse font-bold">LOADING...</div>';
 
             try {
-                // Wikipediaの「選手一覧」からHTMLを直接パースして背番号と名前をセットで抜く
-                const url = `https://ja.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(teamFullName + 'の選手一覧')}&prop=text`;
-                const res = await fetch(url);
+                // 球団一覧ページからリンク（全選手・監督）を確実に抜く
+                const res = await fetch(`https://ja.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(teamName + 'の選手一覧')}&prop=links`);
                 const data = await res.json();
-                const html = data.parse.text["*"];
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, "text/html");
+                const links = data.parse.links.filter(l => l.exists !== undefined && !l['*'].includes('一覧') && !l['*'].includes('Category') && !l['*'].includes('球団') && !l['*'].includes('Template'));
                 
                 grid.innerHTML = '';
-                
-                // Wikipediaの選手一覧テーブルを解析
-                const rows = doc.querySelectorAll('table.wikitable tr');
-                rows.forEach(row => {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length >= 2) {
-                        let number = cells[0].innerText.trim();
-                        let nameElement = cells[1].querySelector('a');
-                        
-                        if (nameElement && !nameElement.innerText.includes('一覧')) {
-                            const name = nameElement.innerText.trim();
-                            const btn = document.createElement('button');
-                            btn.className = `p-4 rounded-xl bg-zinc-900 text-left border-l-4 ${cssClass} flex items-center gap-4 hover:bg-zinc-800 transition-all active:scale-[0.98]`;
-                            btn.innerHTML = `
-                                <span class="w-8 text-yellow-500 font-black italic text-lg">${number}</span>
-                                <span class="font-bold text-xl tracking-tight">${name}</span>
-                            `;
-                            btn.onclick = () => showDetail(name, number);
-                            grid.appendChild(btn);
-                        }
-                    }
+                links.forEach(link => {
+                    const name = link['*'];
+                    const btn = document.createElement('button');
+                    btn.className = `p-4 rounded-xl bg-zinc-900 text-left font-bold text-xl active:scale-95 transition-all ${cssClass}`;
+                    btn.innerHTML = `<span>${name}</span>`;
+                    btn.onclick = () => showDetail(name);
+                    grid.appendChild(btn);
                 });
             } catch (e) {
-                grid.innerHTML = '<div class="text-center py-10 text-red-800">取得に失敗しました</div>';
+                grid.innerHTML = '<div class="text-center py-20 text-red-900">取得失敗。再読み込みしてください。</div>';
             }
         }
 
-        async function showDetail(name, number) {
+        async function showDetail(name) {
             document.getElementById('list-page').classList.add('hidden');
             document.getElementById('detail-page').classList.remove('hidden');
             window.scrollTo(0,0);
             
             document.getElementById('d-name').innerText = name;
-            document.getElementById('d-number').innerText = number ? `NO.${number}` : '';
             document.getElementById('d-wiki').innerText = "概要を取得中...";
-            document.getElementById('d-table').innerHTML = '<div class="p-8 text-center text-zinc-600 text-xs italic loading-pulse">成績データを解析しています...</div>';
+            document.getElementById('d-table').innerHTML = '<p class="p-10 text-center text-zinc-800 italic">成績データを検索中...</p>';
 
             try {
                 // 1. 概要
                 const resSum = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
                 const dataSum = await resSum.json();
-                document.getElementById('d-wiki').innerText = dataSum.extract || "詳細情報が見つかりませんでした。";
+                document.getElementById('d-wiki').innerText = dataSum.extract || "詳細なし";
 
-                // 2. 成績表
-                const resTable = await fetch(`https://ja.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(name)}&prop=text`);
-                const dataTable = await resTable.json();
-                const html = dataTable.parse.text["*"];
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, "text/html");
+                // 2. 成績表（HTMLパース）
+                const resWiki = await fetch(`https://ja.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(name)}&prop=text`);
+                const dataWiki = await resWiki.json();
+                const html = dataWiki.parse.text["*"];
+                const doc = new DOMParser().parseFromString(html, "text/html");
                 
-                // 年度別成績などの「wikitable」クラスを持つテーブルを探す
-                const tables = doc.querySelectorAll('table.wikitable');
-                let foundTable = null;
-                
-                for (const t of tables) {
-                    if (t.innerText.includes('年度') || t.innerText.includes('成績') || t.innerText.includes('試合')) {
-                        foundTable = t;
-                        break;
-                    }
-                }
+                // wikitableを全取得して、それらしいものを探す
+                const tables = Array.from(doc.querySelectorAll('table.wikitable'));
+                const statsTable = tables.find(t => t.innerText.includes('年度') || t.innerText.includes('成績'));
 
-                if (foundTable) {
-                    foundTable.querySelectorAll('a').forEach(a => a.removeAttribute('href'));
+                if (statsTable) {
+                    statsTable.querySelectorAll('a').forEach(a => a.removeAttribute('href'));
                     document.getElementById('d-table').innerHTML = '';
-                    document.getElementById('d-table').appendChild(foundTable);
+                    document.getElementById('d-table').appendChild(statsTable);
                 } else {
-                    document.getElementById('d-table').innerHTML = '<div class="p-8 text-center text-zinc-700 text-xs italic">成績データ（テーブル）が見つかりませんでした</div>';
+                    document.getElementById('d-table').innerHTML = '<p class="p-10 text-center text-zinc-800 italic">成績表は見つかりませんでした</p>';
                 }
             } catch (e) {
-                document.getElementById('d-wiki').innerText = "読み込みエラー";
+                document.getElementById('d-wiki').innerText = "エラーが発生しました";
             }
         }
 
