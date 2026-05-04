@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NPB DIRECTORY V1.05.3</title>
+    <title>NPB DIRECTORY V1.05.4</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -11,7 +11,6 @@
         .hawks { border-left: 6px solid #f6ca06; }
         .tigers { border-left: 6px solid #ffe200; }
         .stats-wrapper { overflow-x: auto; background: #111; border-radius: 12px; margin-top: 10px; border: 1px solid #333; }
-        /* Wikipediaのテーブルデザインをアプリに合わせる */
         table.wikitable { width: 100%; border-collapse: collapse; font-size: 11px; color: #ccc; min-width: 600px; }
         table.wikitable th { background: #333 !important; color: #fbbf24 !important; padding: 10px 5px; border: 1px solid #444; }
         table.wikitable td { padding: 8px 5px; border: 1px solid #333; text-align: center; }
@@ -58,6 +57,13 @@
                     <h3 class="text-[10px] font-bold text-zinc-500 mb-2 tracking-widest uppercase border-b border-zinc-800">Overview</h3>
                     <div id="d-wiki" class="text-sm leading-relaxed text-zinc-300">取得中...</div>
                 </section>
+
+                <section class="text-center py-2">
+                    <a id="d-full-link" href="#" target="_blank" class="inline-block px-6 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold rounded-full border border-zinc-700 transition-colors">
+                        Wikipediaで全文を読む →
+                    </a>
+                </section>
+
                 <section>
                     <h3 class="text-[10px] font-bold text-zinc-500 mb-2 tracking-widest uppercase border-b border-zinc-800">Annual Stats</h3>
                     <div id="d-table" class="stats-wrapper">
@@ -71,14 +77,11 @@
     <script>
         async function changeTeam(teamName, cssClass) {
             const grid = document.getElementById('player-grid');
-            grid.innerHTML = '<div class="py-20 text-center text-zinc-700 font-bold loading-text uppercase text-xs tracking-widest">Synchronizing Roster...</div>';
-
+            grid.innerHTML = '<div class="py-20 text-center text-zinc-700 font-bold loading-text text-xs tracking-widest uppercase">Synchronizing...</div>';
             try {
-                // 球団一覧ページからリンクを確実に取得
                 const res = await fetch(`https://ja.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(teamName + 'の選手一覧')}&prop=links`);
                 const data = await res.json();
                 const links = data.parse.links.filter(l => l.exists !== undefined && !l['*'].includes('一覧') && !l['*'].includes('Category') && !l['*'].includes('球団') && !l['*'].includes('Template'));
-                
                 grid.innerHTML = '';
                 links.forEach(link => {
                     const name = link['*'];
@@ -88,9 +91,7 @@
                     btn.onclick = () => showDetail(name);
                     grid.appendChild(btn);
                 });
-            } catch (e) {
-                grid.innerHTML = '<div class="text-center py-20 text-red-900">取得失敗。</div>';
-            }
+            } catch (e) { grid.innerHTML = '取得失敗'; }
         }
 
         async function showDetail(name) {
@@ -98,27 +99,25 @@
             document.getElementById('detail-page').classList.remove('hidden');
             window.scrollTo(0,0);
             document.getElementById('d-name').innerText = name;
-            document.getElementById('d-wiki').innerText = "概要を取得中...";
-            document.getElementById('d-table').innerHTML = '<p class="p-10 text-center text-zinc-800 italic loading-text">成績データを解析中...</p>';
+            document.getElementById('d-wiki').innerText = "取得中...";
+            document.getElementById('d-table').innerHTML = '<p class="p-10 text-center text-zinc-800 italic loading-text">解析中...</p>';
+            
+            // Wikipediaリンクをセット
+            document.getElementById('d-full-link').href = `https://ja.wikipedia.org/wiki/${encodeURIComponent(name)}`;
 
             try {
-                // 1. 概要取得
                 const resSum = await fetch(`https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(name)}`);
                 const dataSum = await resSum.json();
                 document.getElementById('d-wiki').innerText = dataSum.extract || "詳細なし";
 
-                // 2. 成績表取得（PC版フルテキストを取得して解析）
                 const resWiki = await fetch(`https://ja.wikipedia.org/w/api.php?action=parse&format=json&origin=*&page=${encodeURIComponent(name)}&prop=text&redirects=1`);
                 const dataWiki = await resWiki.json();
                 const html = dataWiki.parse.text["*"];
                 const doc = new DOMParser().parseFromString(html, "text/html");
-                
-                // 「年度別打撃成績」や「年度別投手成績」という見出しの直後にあるテーブル、またはクラス名で検索
                 const tables = Array.from(doc.querySelectorAll('table.wikitable'));
                 const statsTable = tables.find(t => {
                     const text = t.innerText;
-                    return (text.includes('年度') && (text.includes('チーム') || text.includes('球団'))) && 
-                           (text.includes('打率') || text.includes('防御率') || text.includes('試合'));
+                    return (text.includes('年度') && (text.includes('球団') || text.includes('チーム'))) && (text.includes('打率') || text.includes('防御率') || text.includes('試合'));
                 });
 
                 if (statsTable) {
@@ -126,11 +125,9 @@
                     document.getElementById('d-table').innerHTML = '';
                     document.getElementById('d-table').appendChild(statsTable);
                 } else {
-                    document.getElementById('d-table').innerHTML = '<p class="p-10 text-center text-zinc-800 text-xs italic">成績表が見つかりませんでした（投手・打撃成績以外の可能性があります）</p>';
+                    document.getElementById('d-table').innerHTML = '<p class="p-10 text-center text-zinc-800 text-xs italic">成績表なし</p>';
                 }
-            } catch (e) {
-                document.getElementById('d-wiki').innerText = "エラーが発生しました";
-            }
+            } catch (e) { document.getElementById('d-wiki').innerText = "エラー"; }
         }
 
         function backToList() {
