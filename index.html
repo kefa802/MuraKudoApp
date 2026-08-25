@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版</title>
+  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版 (2人〜対応)</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -97,7 +97,7 @@
     </div>
     
     <div id="host-lobby-ui" class="host-panel" style="display:none;">
-      <p style="font-size:0.9rem; margin-bottom:10px;">※4〜7人集まったら開始してください</p>
+      <p style="font-size:0.9rem; margin-bottom:10px;">※2〜7人集まったら開始してください</p>
       <button onclick="hostStartGame()">ゲーム開始 (役職を配る)</button>
     </div>
     <div id="guest-lobby-ui" style="text-align:center; color:var(--text-muted); margin-top:20px;">
@@ -202,7 +202,7 @@
   let roomCode = "";
   let audioCtx = null;
   let nightTimer = null;
-  let stepSec = 10; // デフォルト10秒
+  let stepSec = 10; 
 
   let gameState = {
     phase: 'lobby', 
@@ -314,6 +314,8 @@
       peer.on('connection', connection => {
         connections[connection.peer] = connection;
         connection.on('data', data => handleGuestMessage(connection.peer, data));
+        
+        // ゲスト切断時の処理
         connection.on('close', () => {
           let p = gameState.players.find(p => p.id === connection.peer);
           if(p) p.connected = false;
@@ -325,10 +327,13 @@
 
   function handleGuestMessage(peerId, msg) {
     if (msg.type === 'join') {
-      if(!gameState.players.find(p => p.id === peerId)) {
+      // ★修正①: 重複対策（名前で既存プレイヤーを検索し、いればIDを更新、いなければ新規追加）
+      let existingPlayer = gameState.players.find(p => p.name === msg.name);
+      if(!existingPlayer) {
         gameState.players.push({ id: peerId, name: msg.name, isThief: false, dice: 0, votes: 0, connected: true });
       } else {
-        gameState.players.find(p => p.id === peerId).connected = true;
+        existingPlayer.id = peerId;
+        existingPlayer.connected = true;
       }
       broadcastState();
     } else if (msg.type === 'peek') {
@@ -352,7 +357,8 @@
 
   function hostStartGame() {
     let activePlayers = gameState.players.filter(p => p.connected);
-    if(activePlayers.length < 4) return alert("4人以上必要です (現在"+activePlayers.length+"人)");
+    // ★修正②: 2人以上でゲーム開始できるように変更
+    if(activePlayers.length < 2) return alert("2人以上必要です (現在"+activePlayers.length+"人)");
     
     let thiefIdx = Math.floor(Math.random() * activePlayers.length);
     activePlayers.forEach((p, i) => {
@@ -376,7 +382,7 @@
     
     speak("夜になりました。全員目を閉じてください。");
     clearTimeout(nightTimer);
-    nightTimer = setTimeout(hostAutoNightLoop, 5000); // 5秒後に1時へ
+    nightTimer = setTimeout(hostAutoNightLoop, 5000); 
   }
 
   function hostAutoNightLoop() {
@@ -404,7 +410,6 @@
     }
 
     if (gameState.nightStep === 'awake') {
-      // 泥棒が起きたらチーズフラグをON
       let thief = gameState.players.find(p => p.isThief);
       if(gameState.nightHour >= thief.dice) gameState.cheeseEaten = true;
       
@@ -412,14 +417,12 @@
       playHourBell();
       speak(`${gameState.nightHour}時。${gameState.nightHour}時の人、目を開けてください。`);
       
-      // 設定した待機時間(stepSec)だけ待つ
       nightTimer = setTimeout(hostAutoNightLoop, stepSec * 1000);
       
     } else if (gameState.nightStep === 'close') {
       broadcastState();
       playTick();
       speak(`${gameState.nightHour}時の人、目を閉じてください。`);
-      // 目を閉じる指示の後は3秒待って次の時間へ
       nightTimer = setTimeout(hostAutoNightLoop, 3000);
     }
   }
