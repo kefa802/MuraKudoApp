@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - オンラインマルチプレイ版</title>
+  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -33,7 +33,9 @@
       width: 100%; background: var(--accent); color: #0f172a; border: none;
       padding: 14px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer;
       margin-bottom: 10px;
+      transition: opacity 0.2s;
     }
+    button:active { transform: scale(0.98); }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.secondary { background: #475569; color: #fff; }
     button.danger { background: var(--danger); color: #fff; }
@@ -41,7 +43,6 @@
     .box { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 12px; }
     .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; background: #475569; }
     
-    /* 固有の装飾 */
     .host-panel { border: 2px dashed var(--accent); padding: 16px; border-radius: 12px; background: rgba(245, 158, 11, 0.05); margin-top:20px; }
     .time-large { font-size: 3.5rem; font-weight: 900; color: var(--accent); text-align: center; margin: 10px 0; }
     .secret-ui { border: 2px solid var(--info); background: rgba(56, 189, 248, 0.1); padding: 16px; border-radius: 12px; margin-top: 16px; }
@@ -54,7 +55,7 @@
   <h1>🧀 チーズは誰が食べた？ <span style="font-size:0.8rem; opacity:0.7;">Online</span></h1>
   <div id="connection-status" style="text-align:center; color:var(--info); font-size:0.9rem; margin-bottom:10px;"></div>
 
-  <!-- 1. トップ画面 (作成 or 参加) -->
+  <!-- 1. トップ画面 -->
   <div id="view-home" class="view active">
     <div class="box">
       <label>あなたの名前</label>
@@ -65,6 +66,14 @@
       <div style="flex:1; border: 1px solid #475569; padding:16px; border-radius:8px; text-align:center;">
         <h3 style="margin-bottom:10px; font-size:1.1rem;">ホストになる</h3>
         <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">部屋を作り、進行役を兼ねます。</p>
+        
+        <label style="font-size:0.8rem; color:var(--text-muted); display:block; text-align:left; margin-bottom:4px;">待機時間（覗き見操作用）</label>
+        <select id="step-duration" style="font-size:0.9rem; padding:8px;">
+          <option value="6">6秒 (テンポ重視)</option>
+          <option value="10" selected>10秒 (標準・おすすめ)</option>
+          <option value="15">15秒 (ゆったり)</option>
+        </select>
+        
         <button class="success" onclick="createRoom()">部屋を作る</button>
       </div>
       <div style="flex:1; border: 1px solid #475569; padding:16px; border-radius:8px; text-align:center;">
@@ -87,7 +96,6 @@
       <ul id="lobby-players" style="list-style:none; margin-top:10px; line-height:1.8;"></ul>
     </div>
     
-    <!-- ホスト専用UI -->
     <div id="host-lobby-ui" class="host-panel" style="display:none;">
       <p style="font-size:0.9rem; margin-bottom:10px;">※4〜7人集まったら開始してください</p>
       <button onclick="hostStartGame()">ゲーム開始 (役職を配る)</button>
@@ -108,9 +116,8 @@
       <p id="my-desc-display" style="font-size:0.9rem;"></p>
     </div>
 
-    <!-- ホスト専用UI -->
     <div id="host-check-ui" class="host-panel" style="display:none;">
-      <button onclick="hostNextPhase('night')">全員確認完了 ➔ 夜フェーズへ進む</button>
+      <button onclick="hostStartNightAuto()">全員確認完了 ➔ 夜フェーズ(自動)を開始</button>
     </div>
     <div id="guest-check-ui" style="text-align:center; color:var(--text-muted); margin-top:20px;">
       ホストが夜フェーズに進めるのを待っています...
@@ -125,7 +132,6 @@
       <div id="night-status-text" class="status-msg">目を閉じてください...</div>
     </div>
 
-    <!-- 自分の時間が来た時に表示されるシークレットUI -->
     <div id="night-secret-ui" class="secret-ui" style="display:none;">
       <h3 style="color:var(--accent); text-align:center; margin-bottom:10px;">👀 あなたの時間です！</h3>
       <div id="cheese-status-display" style="font-size:1.2rem; font-weight:bold; text-align:center; margin-bottom:15px; padding:10px; background:#0b1120; border-radius:8px;"></div>
@@ -140,10 +146,8 @@
       </div>
     </div>
 
-    <!-- ホスト専用UI -->
-    <div id="host-night-ui" class="host-panel" style="display:none;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">手動で進行します。音声通話で指示出ししてください。</p>
-      <button id="host-night-btn" onclick="hostProcessNight()">1時の人を起こす</button>
+    <div id="host-night-ui" class="host-panel" style="display:none; text-align:center; color:var(--accent); font-weight:bold;">
+      自動アナウンスで進行中です...
     </div>
   </div>
 
@@ -160,7 +164,6 @@
       <p id="vote-status" style="text-align:center; color:var(--success); font-weight:bold; display:none; margin-top:10px;">投票完了！</p>
     </div>
 
-    <!-- ホスト専用UI -->
     <div id="host-day-ui" class="host-panel" style="display:none;">
       <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">※全員の投票が終わったら結果発表へ</p>
       <button class="danger" onclick="hostEndGame()">議論終了 ➔ 結果発表</button>
@@ -186,35 +189,33 @@
       <button onclick="hostRestartLobby()">ロビーに戻る</button>
     </div>
   </div>
-
 </div>
 
 <script>
-  // --- 状態管理 ---
   let peer = null;
-  let conn = null; // ゲスト用コネクション
-  let connections = {}; // ホスト用コネクションリスト
+  let conn = null; 
+  let connections = {}; 
   
   let isHost = false;
   let myName = "";
   let myPeerId = "";
   let roomCode = "";
+  let audioCtx = null;
+  let nightTimer = null;
+  let stepSec = 10; // デフォルト10秒
 
-  // ゲーム状態 (ホストが正を持っており、ゲストに同期する)
   let gameState = {
-    phase: 'lobby', // lobby, check, night, day, result
-    players: [], // { id, name, isThief, dice, votes, connected }
+    phase: 'lobby', 
+    players: [], 
     nightHour: 0,
-    nightStep: 'wait', // wait(0:00), awake(目を開ける), close(目を閉じる指示後)
+    nightStep: 'wait', 
     cheeseEaten: false
   };
 
-  // --- UI操作 ---
   function showView(id) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(id).classList.add('active');
     
-    // ホストUIの出し分け
     document.getElementById('host-lobby-ui').style.display = isHost ? 'block' : 'none';
     document.getElementById('guest-lobby-ui').style.display = isHost ? 'none' : 'block';
     document.getElementById('host-check-ui').style.display = isHost ? 'block' : 'none';
@@ -228,7 +229,48 @@
     document.getElementById('connection-status').textContent = msg;
   }
 
-  // --- 通信初期化 (PeerJS) ---
+  // --- 音声・SE処理 ---
+  function initAudio() {
+    try {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) audioCtx = new AudioContext();
+      }
+    } catch (e) {}
+  }
+  function playTone(freq, type = 'sine', duration = 0.15) {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
+  }
+  function playTick() { playTone(800, 'triangle', 0.05); }
+  function playHourBell() { playTone(523.25, 'sine', 0.6); }
+  function playMorningChime() {
+    playTone(440, 'sine', 0.4);
+    setTimeout(() => playTone(554.37, 'sine', 0.4), 150);
+    setTimeout(() => playTone(659.25, 'sine', 0.6), 300);
+  }
+  function speak(text) {
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
+        uttr.lang = 'ja-JP';
+        window.speechSynthesis.speak(uttr);
+      }
+    } catch (e) {}
+  }
+
   function initPeer(onOpenCallback) {
     setStatus("通信サーバーに接続中...");
     peer = new Peer();
@@ -243,7 +285,6 @@
     });
   }
 
-  // === ホスト側の処理 ===
   function generateRoomCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
   }
@@ -251,28 +292,15 @@
   function createRoom() {
     myName = document.getElementById('player-name').value.trim();
     if(!myName) return alert("名前を入力してください");
+    stepSec = parseInt(document.getElementById('step-duration').value, 10);
     
     isHost = true;
     roomCode = generateRoomCode();
+    initAudio();
     
     initPeer(() => {
-      // 自分の情報をプレイヤーリストに追加
       gameState.players.push({ id: myPeerId, name: myName, isThief: false, dice: 0, votes: 0, connected: true });
-      
-      // 他のプレイヤーからの接続を待つ
-      peer.on('connection', connection => {
-        connection.on('open', () => {
-          connections[connection.peer] = connection;
-        });
-        connection.on('data', data => handleGuestMessage(connection.peer, data));
-        connection.on('close', () => {
-          let p = gameState.players.find(p => p.id === connection.peer);
-          if(p) p.connected = false;
-          broadcastState();
-        });
-      });
-      
-      peer.destroy(); // 一旦破棄
+      peer.destroy();
       
       let hostId = "cheese-game-" + roomCode;
       peer = new Peer(hostId);
@@ -286,6 +314,11 @@
       peer.on('connection', connection => {
         connections[connection.peer] = connection;
         connection.on('data', data => handleGuestMessage(connection.peer, data));
+        connection.on('close', () => {
+          let p = gameState.players.find(p => p.id === connection.peer);
+          if(p) p.connected = false;
+          broadcastState();
+        });
       });
     });
   }
@@ -294,6 +327,8 @@
     if (msg.type === 'join') {
       if(!gameState.players.find(p => p.id === peerId)) {
         gameState.players.push({ id: peerId, name: msg.name, isThief: false, dice: 0, votes: 0, connected: true });
+      } else {
+        gameState.players.find(p => p.id === peerId).connected = true;
       }
       broadcastState();
     } else if (msg.type === 'peek') {
@@ -310,11 +345,8 @@
   function broadcastState() {
     if(!isHost) return;
     updateUIFromState(gameState); 
-    
     for (let id in connections) {
-      if (connections[id].open) {
-        connections[id].send({ type: 'sync', state: gameState });
-      }
+      if (connections[id].open) connections[id].send({ type: 'sync', state: gameState });
     }
   }
 
@@ -333,46 +365,62 @@
     broadcastState();
   }
 
-  function hostNextPhase(newPhase) {
-    gameState.phase = newPhase;
-    if(newPhase === 'night') {
-      gameState.nightHour = 0;
-      gameState.nightStep = 'wait';
-      gameState.cheeseEaten = false;
-      document.getElementById('host-night-btn').textContent = "1時の人を起こす";
-    }
+  // --- ホストの夜の自動進行処理 ---
+  function hostStartNightAuto() {
+    initAudio();
+    gameState.phase = 'night';
+    gameState.nightHour = 0;
+    gameState.nightStep = 'wait';
+    gameState.cheeseEaten = false;
     broadcastState();
+    
+    speak("夜になりました。全員目を閉じてください。");
+    clearTimeout(nightTimer);
+    nightTimer = setTimeout(hostAutoNightLoop, 5000); // 5秒後に1時へ
   }
 
-  function hostProcessNight() {
-    let btn = document.getElementById('host-night-btn');
-    
+  function hostAutoNightLoop() {
+    if (gameState.nightHour === 0) {
+      gameState.nightHour = 1;
+      gameState.nightStep = 'awake';
+    } else if (gameState.nightStep === 'awake') {
+      gameState.nightStep = 'close';
+    } else if (gameState.nightStep === 'close') {
+      gameState.nightHour++;
+      gameState.nightStep = 'awake';
+    }
+
     if (gameState.nightHour > 6) {
-      hostNextPhase('day');
+      // 朝フェーズへ
+      gameState.phase = 'day';
+      broadcastState();
+      playMorningChime();
+      if(gameState.cheeseEaten) {
+        speak("朝が来ました。全員目を覚ましてください。チーズが無くなっています！");
+      } else {
+        speak("朝が来ました。全員目を覚ましてください。チーズはまだ残っています！");
+      }
       return;
     }
 
-    if (gameState.nightStep === 'wait' || gameState.nightStep === 'close') {
-      if(gameState.nightStep === 'close') gameState.nightHour++;
-      else if(gameState.nightHour === 0) gameState.nightHour = 1; 
-      
-      if(gameState.nightHour > 6) {
-        hostNextPhase('day');
-        return;
-      }
-      
-      gameState.nightStep = 'awake';
-      
+    if (gameState.nightStep === 'awake') {
+      // 泥棒が起きたらチーズフラグをON
       let thief = gameState.players.find(p => p.isThief);
       if(gameState.nightHour >= thief.dice) gameState.cheeseEaten = true;
       
-      btn.textContent = gameState.nightHour + "時の人を寝かせる";
       broadcastState();
+      playHourBell();
+      speak(`${gameState.nightHour}時。${gameState.nightHour}時の人、目を開けてください。`);
       
-    } else if (gameState.nightStep === 'awake') {
-      gameState.nightStep = 'close';
-      btn.textContent = "次の時間(" + (gameState.nightHour + 1) + "時)の人を起こす";
+      // 設定した待機時間(stepSec)だけ待つ
+      nightTimer = setTimeout(hostAutoNightLoop, stepSec * 1000);
+      
+    } else if (gameState.nightStep === 'close') {
       broadcastState();
+      playTick();
+      speak(`${gameState.nightHour}時の人、目を閉じてください。`);
+      // 目を閉じる指示の後は3秒待って次の時間へ
+      nightTimer = setTimeout(hostAutoNightLoop, 3000);
     }
   }
 
@@ -382,6 +430,7 @@
   }
   
   function hostRestartLobby() {
+    clearTimeout(nightTimer);
     gameState.phase = 'lobby';
     gameState.players.forEach(p => { p.dice=0; p.votes=0; p.isThief=false; });
     broadcastState();
@@ -392,6 +441,7 @@
     myName = document.getElementById('player-name').value.trim();
     roomCode = document.getElementById('room-code-input').value.trim();
     if(!myName || !roomCode) return alert("名前と4桁の部屋コードを入力してください");
+    initAudio();
     
     initPeer(() => {
       let hostId = "cheese-game-" + roomCode;
