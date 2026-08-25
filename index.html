@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - 自動GMシステム (完全版)</title>
+  <title>🧀 チーズは誰が食べた？ - 自動GMシステム (手動進行＆覗き見対応)</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -13,6 +13,7 @@
       --accent-glow: rgba(245, 158, 11, 0.3);
       --danger: #ef4444;
       --success: #10b981;
+      --info: #38bdf8;
       --text: #f8fafc;
       --text-muted: #94a3b8;
     }
@@ -82,6 +83,7 @@
     }
     button:hover { filter: brightness(1.1); }
     button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.secondary { background: #475569; color: #fff; }
     button.danger { background: var(--danger); color: #fff; }
     button.success { background: var(--success); color: #0f172a; }
@@ -126,50 +128,54 @@
     .clock-stage {
       background: #0b1120;
       border-radius: 16px;
-      padding: 40px 20px;
+      padding: 30px 20px;
       text-align: center;
-      margin: 20px 0;
+      margin: 16px 0;
       border: 2px solid #1e293b;
       position: relative;
     }
     .time-large {
-      font-size: 4.5rem;
+      font-size: 4rem;
       font-weight: 900;
       color: var(--accent);
-      text-shadow: 0 0 25px var(--accent-glow);
+      text-shadow: 0 0 20px var(--accent-glow);
       letter-spacing: 2px;
       font-variant-numeric: tabular-nums;
+      margin-bottom: 10px;
     }
     .cheese-status-box {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: bold;
-      padding: 12px;
+      padding: 10px;
       background: rgba(255,255,255,0.05);
       border-radius: 8px;
-      margin-top: 16px;
+      margin: 10px 0;
     }
     .gm-announcement {
-      font-size: 1.15rem;
+      font-size: 1.1rem;
       color: var(--text-muted);
-      min-height: 3em;
+      min-height: 2.5em;
       display: flex;
       align-items: center;
       justify-content: center;
       margin-top: 12px;
-      padding: 0 10px;
     }
-    .pulse {
-      animation: pulse 1s infinite alternate;
+    
+    /* 秘密情報（覗き見・仲間確認）ボックス */
+    .secret-info-box {
+      background: #0f172a;
+      border: 2px dashed var(--info);
+      border-radius: 12px;
+      padding: 16px;
+      margin-top: 16px;
+      text-align: left;
     }
-    @keyframes pulse {
-      from { transform: scale(1); opacity: 0.9; }
-      to { transform: scale(1.04); opacity: 1; }
-    }
+
     .discussion-timer {
       font-size: 3rem;
       font-weight: 800;
       text-align: center;
-      color: #38bdf8;
+      color: var(--info);
       margin: 10px 0;
     }
   </style>
@@ -192,15 +198,6 @@
     <button class="secondary" onclick="addPlayerSlot()" style="margin-top:4px;">＋ 枠を追加</button>
 
     <div style="margin-top:16px;">
-      <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:4px;">各時間の待機時間（秒）</label>
-      <select id="step-duration">
-        <option value="4">4秒 (テンポ重視)</option>
-        <option value="6" selected>6秒 (標準・おすすめ)</option>
-        <option value="8">8秒 (ゆったり)</option>
-      </select>
-    </div>
-
-    <div style="margin-top:10px;">
       <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:4px;">朝の議論時間</label>
       <select id="discussion-time-limit">
         <option value="120">2分</option>
@@ -209,9 +206,7 @@
       </select>
     </div>
 
-    <!-- アラートの代わりに画面上にエラーを表示するエリア -->
     <div id="setup-error" style="color: var(--danger); font-size: 0.95rem; font-weight: bold; text-align: center; min-height: 20px; margin-top: 12px;"></div>
-
     <button onclick="setupGame()">ゲームマスター開始</button>
   </div>
 
@@ -223,21 +218,28 @@
       自分の番になったら「確認」ボタンを押して、他の人に見られないように自分の情報を確認してください。
     </p>
     <div id="check-list"></div>
-    <button onclick="startNightSequence()" class="success" style="margin-top:16px;">全員確認完了 ➔ 夜を開始する</button>
+    <button onclick="initNightSequence()" class="success" style="margin-top:16px;">全員確認完了 ➔ 夜を開始する</button>
   </div>
 
-  <!-- 3. 夜フェーズ (GM自動進行) -->
+  <!-- 3. 夜フェーズ (手動進行＆覗き見対応) -->
   <div id="view-night" class="view">
     <span class="phase-badge" style="background:#4338ca;">🌙 夜フェーズ</span>
+    
     <div class="clock-stage">
       <div id="night-clock" class="time-large">0:00</div>
       
-      <!-- 追加：チーズの状態表示（目を開けた時にこれを見て確認します） -->
-      <div id="cheese-status" class="cheese-status-box">準備中...</div>
+      <!-- チーズの状態表示（目をあけた時だけ表示） -->
+      <div id="cheese-status" class="cheese-status-box" style="visibility:hidden;">準備中...</div>
       
-      <div id="gm-text" class="gm-announcement">GMが音声を準備しています...</div>
+      <!-- 起きている人の秘密情報（仲間・覗き見） -->
+      <div id="night-secret-info" class="secret-info-box" style="display:none;"></div>
+      
+      <!-- GMのアナウンス -->
+      <div id="gm-text" class="gm-announcement">夜になりました。全員目を閉じてください。</div>
     </div>
-    <button class="secondary" onclick="skipToDayPhase()">昼フェーズへスキップ</button>
+    
+    <!-- 進行用メインボタン -->
+    <button id="night-next-btn" class="success" style="padding:16px; font-size:1.1rem; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">夜を開始する</button>
   </div>
 
   <!-- 4. 昼の議論＆投票フェーズ -->
@@ -301,19 +303,21 @@
   let timerInterval = null;
   let isTimerRunning = false;
   let audioCtx = null;
+  
+  // 夜フェーズ用の状態管理
+  let currentNightHour = 0;
+  // 'sleep_wait' (起きる前), 'awake' (情報表示中), 'close_wait' (目を閉じた後)
+  let nightState = 'sleep_wait'; 
+  let peekUsed = false;
+  let cheeseEaten = false;
 
-  // エラー対策：音声APIがブロックされてもアプリが落ちないようにする
   function initAudio() {
     try {
       if (!audioCtx) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (AudioContext) {
-          audioCtx = new AudioContext();
-        }
+        if (AudioContext) audioCtx = new AudioContext();
       }
-    } catch (e) {
-      console.warn("音声の初期化に失敗しました", e);
-    }
+    } catch (e) { console.warn("音声初期化エラー", e); }
   }
 
   function playTone(freq, type = 'sine', duration = 0.15) {
@@ -332,7 +336,6 @@
     } catch (e) {}
   }
 
-  function playTick() { playTone(800, 'triangle', 0.05); }
   function playHourBell() { playTone(523.25, 'sine', 0.6); }
   function playMorningChime() {
     playTone(440, 'sine', 0.4);
@@ -364,15 +367,12 @@
 
   function setupGame() {
     const errorMsg = document.getElementById('setup-error');
-    errorMsg.textContent = ''; // エラーメッセージをリセット
-
-    // 音声の安全な初期化
+    errorMsg.textContent = '';
     initAudio();
 
     const inputs = document.querySelectorAll('#player-inputs input');
     const names = Array.from(inputs).map(i => i.value.trim()).filter(n => n.length > 0);
     
-    // アラートポップアップを廃止し、画面上にエラーを出す（フリーズ対策）
     if (names.length < 4 || names.length > 7) {
       errorMsg.textContent = '【エラー】プレイヤー名は空欄にせず、4〜7人分入力してください。';
       return;
@@ -400,9 +400,7 @@
       pill.innerHTML = `
         <div>
           <strong>${p.name}</strong>
-          <span class="status-tag ${p.checked ? 'checked' : ''}" style="margin-left:8px;">
-            ${p.checked ? '確認済' : '未確認'}
-          </span>
+          <span class="status-tag ${p.checked ? 'checked' : ''}" style="margin-left:8px;">${p.checked ? '確認済' : '未確認'}</span>
         </div>
         <button class="secondary" style="width:auto; margin:0; padding:6px 14px; font-size:0.85rem;" onclick="openSecretModal(${idx})">確認</button>
       `;
@@ -429,19 +427,15 @@
       roleBadge.textContent = '🐭 ねぼすけネズミ (村人)';
       roleBadge.style.color = 'var(--success)';
       diceVal.textContent = `${p.dice} 時`;
-      desc.textContent = `夜の「${p.dice}時」にこっそり目を開け、共有画面の「チーズの状態」を確認してください。`;
+      desc.textContent = `夜の「${p.dice}時」にこっそり目を開け、仲間やチーズの状態を確認してください。`;
     }
 
     hideSecret();
     document.getElementById('secret-modal').style.display = 'flex';
   }
 
-  function showSecret() {
-    document.getElementById('modal-hidden-content').style.display = 'block';
-  }
-  function hideSecret() {
-    document.getElementById('modal-hidden-content').style.display = 'none';
-  }
+  function showSecret() { document.getElementById('modal-hidden-content').style.display = 'block'; }
+  function hideSecret() { document.getElementById('modal-hidden-content').style.display = 'none'; }
   function closeSecretModal() {
     if (activeIdx !== null) {
       players[activeIdx].checked = true;
@@ -450,66 +444,162 @@
     document.getElementById('secret-modal').style.display = 'none';
   }
 
-  // --- 夜フェーズ進行 ---
-  function startNightSequence() {
+  // --- 手動・夜フェーズ ---
+  function initNightSequence() {
     showView('view-night');
+    currentNightHour = 1;
+    nightState = 'sleep_wait';
+    cheeseEaten = false;
+    
+    const clock = document.getElementById('night-clock');
+    const gmText = document.getElementById('gm-text');
+    const btn = document.getElementById('night-next-btn');
+    
+    clock.textContent = "0:00";
+    gmText.textContent = "夜になりました。全員目を閉じてください。";
+    document.getElementById('cheese-status').style.visibility = 'hidden';
+    document.getElementById('night-secret-info').style.display = 'none';
+    
+    speak("夜になりました。全員目を閉じてください。");
+    
+    btn.textContent = "1時を開始する";
+    btn.onclick = processNightStep;
+  }
+
+  function processNightStep() {
     const clock = document.getElementById('night-clock');
     const gmText = document.getElementById('gm-text');
     const cheeseStatus = document.getElementById('cheese-status');
-    const stepSec = parseInt(document.getElementById('step-duration').value, 10);
-    const thief = players.find(p => p.isThief);
+    const secretInfo = document.getElementById('night-secret-info');
+    const btn = document.getElementById('night-next-btn');
 
-    clock.textContent = "0:00";
-    cheeseStatus.innerHTML = '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
-    gmText.textContent = "夜になりました。全員目を閉じて机に頭をつけてください。";
-    speak("夜になりました。全員目を閉じてください。");
-
-    let currentHour = 1;
-
-    setTimeout(() => {
-      function tickHour() {
-        if (currentHour <= 6) {
-          playHourBell();
-          clock.textContent = `${currentHour}:00`;
-          clock.classList.add('pulse');
-          gmText.innerHTML = `<strong style="color:var(--accent); font-size:1.3rem;">${currentHour}時</strong> の人、起きてください。`;
-          speak(`${currentHour}時。`);
-
-          // ★自動チーズ盗まれ判定機能★
-          // 泥棒の出目以上の時間になったら、画面上のチーズが消える
-          if (currentHour >= thief.dice) {
-            cheeseStatus.innerHTML = '<span style="color:var(--danger);">❌ チーズは盗まれました</span>';
-          } else {
-            cheeseStatus.innerHTML = '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
-          }
-
-          setTimeout(() => {
-            playTick();
-            gmText.textContent = `${currentHour}時の人、目を閉じてください。`;
-            speak(`${currentHour}時の人、目を閉じてください。`);
-            clock.classList.remove('pulse');
-            currentHour++;
-            setTimeout(tickHour, 2000);
-          }, stepSec * 1000);
-
-        } else {
-          clock.textContent = "7:00";
-          playMorningChime();
-          gmText.textContent = "朝が来ました！チーズが無くなっています！";
-          speak("朝が来ました。全員目を覚ましてください。チーズが無くなっています！");
-          
-          setTimeout(() => {
-            startDayPhase();
-          }, 4500);
-        }
+    if (currentNightHour > 6) {
+      // 終了して朝へ
+      clock.textContent = "7:00";
+      cheeseStatus.style.visibility = 'hidden';
+      secretInfo.style.display = 'none';
+      playMorningChime();
+      
+      if (cheeseEaten) {
+        gmText.textContent = "朝が来ました！チーズが無くなっています！";
+        speak("朝が来ました。全員目を覚ましてください。チーズが無くなっています！");
+      } else {
+        gmText.textContent = "朝が来ました！なんと、誰も起きなかったためチーズはまだ残っています！";
+        speak("朝が来ました。誰も起きなかったため、チーズはまだ残っています！");
       }
+      
+      btn.textContent = "昼フェーズへ";
+      btn.onclick = startDayPhase;
+      return;
+    }
 
-      tickHour();
-    }, 4000);
+    clock.textContent = `${currentNightHour}:00`;
+
+    if (nightState === 'sleep_wait') {
+      // 1. 点呼 (目を覚まさせる)
+      playHourBell();
+      gmText.innerHTML = `<strong style="color:var(--accent); font-size:1.3rem;">${currentNightHour}時</strong> の人、起きてください。`;
+      speak(`${currentNightHour}時の人、起きてください。`);
+      
+      cheeseStatus.style.visibility = 'hidden';
+      secretInfo.style.display = 'none';
+      
+      btn.textContent = "画面の情報を表示する";
+      btn.onclick = () => {
+        nightState = 'awake';
+        peekUsed = false;
+        processNightStep();
+      };
+
+    } else if (nightState === 'awake') {
+      // 2. 情報表示（チーズ状況 ＆ 仲間の有無・覗き見）
+      const thief = players.find(p => p.isThief);
+      if (currentNightHour >= thief.dice) {
+        cheeseStatus.innerHTML = '<span style="color:var(--danger);">❌ チーズは盗まれました</span>';
+        cheeseEaten = true;
+      } else {
+        cheeseStatus.innerHTML = '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
+      }
+      cheeseStatus.style.visibility = 'visible';
+
+      // 仲間の判定
+      const awakePlayers = players.filter(p => p.dice === currentNightHour);
+      let infoHtml = '';
+
+      if (awakePlayers.length === 0) {
+        infoHtml = '<div style="color:var(--text-muted); text-align:center;">（この時間に起きている人はいません）</div>';
+      } else if (awakePlayers.length > 1) {
+        infoHtml = '<div style="margin-bottom:8px; color:var(--success);"><strong>【一緒に起きている仲間】</strong></div>';
+        awakePlayers.forEach(p => {
+          const roleStr = p.isThief ? '<span style="color:var(--danger);">泥棒</span>' : '<span style="color:var(--text-muted);">ネズミ</span>';
+          infoHtml += `<div style="font-size:1.1rem; margin-bottom:4px;">・${p.name} (${roleStr})</div>`;
+        });
+      } else {
+        // 単独の場合（覗き見機能）
+        const alonePlayer = awakePlayers[0];
+        infoHtml = `
+          <div style="margin-bottom:8px; color:var(--info);"><strong>${alonePlayer.name}さん、あなたは1人です。</strong></div>
+          <div style="font-size:0.9rem; color:var(--text-muted); margin-bottom:12px;">他の誰か1人の出目（ダイス）を確認できます。</div>
+          <div style="display:flex; gap:8px;">
+            <select id="peek-select" style="margin:0;">
+              <option value="">-- プレイヤーを選択 --</option>
+              ${players.filter(p => p.name !== alonePlayer.name).map(p => `<option value="${p.name}">${p.name}</option>`).join('')}
+            </select>
+            <button id="peek-btn" class="secondary" style="margin:0; padding:8px 16px; width:auto;" onclick="executePeek()">確認</button>
+          </div>
+          <div id="peek-result" style="margin-top:12px; font-weight:bold; color:var(--accent); min-height:1.5em;"></div>
+        `;
+      }
+      
+      secretInfo.innerHTML = infoHtml;
+      secretInfo.style.display = 'block';
+
+      gmText.textContent = "情報を確認したら、次へ進んでください。";
+      
+      btn.textContent = "確認完了（目を閉じる指示へ）";
+      btn.onclick = () => {
+        nightState = 'close_wait';
+        processNightStep();
+      };
+
+    } else if (nightState === 'close_wait') {
+      // 3. 目を閉じる指示
+      gmText.textContent = `${currentNightHour}時の人、目を閉じてください。`;
+      speak(`${currentNightHour}時の人、目を閉じてください。`);
+      
+      // 次の人が見ないように画面をリセット
+      cheeseStatus.style.visibility = 'hidden';
+      secretInfo.style.display = 'none';
+
+      btn.textContent = currentNightHour < 6 ? `次の時間（${currentNightHour + 1}時）へ` : "朝にする";
+      btn.onclick = () => {
+        currentNightHour++;
+        nightState = 'sleep_wait';
+        processNightStep();
+      };
+    }
   }
 
-  function skipToDayPhase() {
-    startDayPhase();
+  // 覗き見実行関数 (グローバルに配置)
+  function executePeek() {
+    if (peekUsed) return;
+    const sel = document.getElementById('peek-select');
+    const btn = document.getElementById('peek-btn');
+    if (!sel || sel.value === "") {
+      alert("確認するプレイヤーを選んでください");
+      return;
+    }
+    
+    const targetName = sel.value;
+    const target = players.find(p => p.name === targetName);
+    const res = document.getElementById('peek-result');
+    
+    if (target) {
+      res.innerHTML = `🤫 ${target.name}さんの出目は「<span style="font-size:1.3rem;">${target.dice}時</span>」です。`;
+      peekUsed = true;
+      sel.disabled = true;
+      btn.disabled = true;
+    }
   }
 
   // --- 昼フェーズ進行 ---
@@ -539,9 +629,7 @@
       if (discussionSec > 0) {
         discussionSec--;
         updateTimerDisplay();
-        if (discussionSec === 30) {
-          speak("残り30秒です。");
-        }
+        if (discussionSec === 30) speak("残り30秒です。");
       } else {
         clearInterval(timerInterval);
         playMorningChime();
@@ -621,7 +709,7 @@
     const summary = document.getElementById('result-summary');
     summary.innerHTML = players.map(p => `
       <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #334155; font-size:0.95rem;">
-        <span>${p.name} ${p.isThief ? '<strong style="color:var(--danger)">[泥棒]</strong>' : '<span style="color:var(--success)">[ネズミ]</span>'}</span>
+        <span>${p.name} ${p.isThief ? '<strong style="color:var(--danger)">[泥棒]</strong>' : '<span style="color:var(--text-muted)">[ネズミ]</span>'}</span>
         <span>出目: <strong>${p.dice}時</strong> / 獲得: <strong>${p.votes}票</strong></span>
       </div>
     `).join('');
