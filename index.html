@@ -140,6 +140,14 @@
       letter-spacing: 2px;
       font-variant-numeric: tabular-nums;
     }
+    .cheese-status-box {
+      font-size: 1.4rem;
+      font-weight: bold;
+      padding: 12px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 8px;
+      margin-top: 16px;
+    }
     .gm-announcement {
       font-size: 1.15rem;
       color: var(--text-muted);
@@ -201,6 +209,9 @@
       </select>
     </div>
 
+    <!-- アラートの代わりに画面上にエラーを表示するエリア -->
+    <div id="setup-error" style="color: var(--danger); font-size: 0.95rem; font-weight: bold; text-align: center; min-height: 20px; margin-top: 12px;"></div>
+
     <button onclick="setupGame()">ゲームマスター開始</button>
   </div>
 
@@ -220,6 +231,10 @@
     <span class="phase-badge" style="background:#4338ca;">🌙 夜フェーズ</span>
     <div class="clock-stage">
       <div id="night-clock" class="time-large">0:00</div>
+      
+      <!-- 追加：チーズの状態表示（目を開けた時にこれを見て確認します） -->
+      <div id="cheese-status" class="cheese-status-box">準備中...</div>
+      
       <div id="gm-text" class="gm-announcement">GMが音声を準備しています...</div>
     </div>
     <button class="secondary" onclick="skipToDayPhase()">昼フェーズへスキップ</button>
@@ -229,7 +244,7 @@
   <div id="view-day" class="view">
     <span class="phase-badge" style="background:#0284c7;">☀️ 昼フェーズ</span>
     <h3 id="morning-title" style="text-align:center; margin-top:8px;">朝が来ました</h3>
-    <div id="morning-status-msg" style="text-align:center; font-size:0.9rem; color:var(--accent); margin:6px 0;"></div>
+    <div id="morning-status-msg" style="text-align:center; font-size:1rem; font-weight:bold; color:var(--accent); margin:10px 0;"></div>
     
     <div class="discussion-timer" id="timer-display">03:00</div>
     <div style="display:flex; gap:8px;">
@@ -286,26 +301,35 @@
   let timerInterval = null;
   let isTimerRunning = false;
   let audioCtx = null;
-  let cheeseEaten = true; // チーズが食べられたかどうか
 
+  // エラー対策：音声APIがブロックされてもアプリが落ちないようにする
   function initAudio() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    try {
+      if (!audioCtx) {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          audioCtx = new AudioContext();
+        }
+      }
+    } catch (e) {
+      console.warn("音声の初期化に失敗しました", e);
     }
   }
 
   function playTone(freq, type = 'sine', duration = 0.15) {
     if (!audioCtx) return;
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    } catch (e) {}
   }
 
   function playTick() { playTone(800, 'triangle', 0.05); }
@@ -317,13 +341,14 @@
   }
 
   function speak(text) {
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const uttr = new SpeechSynthesisUtterance(text);
-      uttr.lang = 'ja-JP';
-      uttr.rate = 1.0;
-      window.speechSynthesis.speak(uttr);
-    }
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
+        uttr.lang = 'ja-JP';
+        window.speechSynthesis.speak(uttr);
+      }
+    } catch (e) {}
   }
 
   function addPlayerSlot() {
@@ -338,11 +363,18 @@
   }
 
   function setupGame() {
+    const errorMsg = document.getElementById('setup-error');
+    errorMsg.textContent = ''; // エラーメッセージをリセット
+
+    // 音声の安全な初期化
     initAudio();
+
     const inputs = document.querySelectorAll('#player-inputs input');
     const names = Array.from(inputs).map(i => i.value.trim()).filter(n => n.length > 0);
+    
+    // アラートポップアップを廃止し、画面上にエラーを出す（フリーズ対策）
     if (names.length < 4 || names.length > 7) {
-      alert('プレイヤーは4名から7名で設定してください。');
+      errorMsg.textContent = '【エラー】プレイヤー名は空欄にせず、4〜7人分入力してください。';
       return;
     }
 
@@ -392,12 +424,12 @@
       roleBadge.textContent = '🧀 チーズ泥棒 (犯人)';
       roleBadge.style.color = 'var(--danger)';
       diceVal.textContent = `${p.dice} 時`;
-      desc.textContent = `夜フェーズの「${p.dice}時」に目を覚ましてチーズを盗んでください。他の人の目撃を避けましょう！`;
+      desc.textContent = `夜の「${p.dice}時」にこっそり目を開け、チーズを盗んでください！`;
     } else {
       roleBadge.textContent = '🐭 ねぼすけネズミ (村人)';
       roleBadge.style.color = 'var(--success)';
       diceVal.textContent = `${p.dice} 時`;
-      desc.textContent = `夜フェーズの「${p.dice}時」に目を覚まして、周りで誰かが動いていないか確認してください。`;
+      desc.textContent = `夜の「${p.dice}時」にこっそり目を開け、共有画面の「チーズの状態」を確認してください。`;
     }
 
     hideSecret();
@@ -423,9 +455,12 @@
     showView('view-night');
     const clock = document.getElementById('night-clock');
     const gmText = document.getElementById('gm-text');
+    const cheeseStatus = document.getElementById('cheese-status');
     const stepSec = parseInt(document.getElementById('step-duration').value, 10);
+    const thief = players.find(p => p.isThief);
 
     clock.textContent = "0:00";
+    cheeseStatus.innerHTML = '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
     gmText.textContent = "夜になりました。全員目を閉じて机に頭をつけてください。";
     speak("夜になりました。全員目を閉じてください。");
 
@@ -440,30 +475,29 @@
           gmText.innerHTML = `<strong style="color:var(--accent); font-size:1.3rem;">${currentHour}時</strong> の人、起きてください。`;
           speak(`${currentHour}時。`);
 
+          // ★自動チーズ盗まれ判定機能★
+          // 泥棒の出目以上の時間になったら、画面上のチーズが消える
+          if (currentHour >= thief.dice) {
+            cheeseStatus.innerHTML = '<span style="color:var(--danger);">❌ チーズは盗まれました</span>';
+          } else {
+            cheeseStatus.innerHTML = '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
+          }
+
           setTimeout(() => {
             playTick();
             gmText.textContent = `${currentHour}時の人、目を閉じてください。`;
-            speak(`${currentHour}時の人、目を閉じてください。`;
+            speak(`${currentHour}時の人、目を閉じてください。`);
             clock.classList.remove('pulse');
             currentHour++;
             setTimeout(tickHour, 2000);
           }, stepSec * 1000);
 
         } else {
-          // 判定：チーズが食べられたか？（泥棒と同じ時間に起きたネズミがいたかどうか、あるいは誰も起きていないか）
-          checkCheeseStatus();
-
           clock.textContent = "7:00";
           playMorningChime();
+          gmText.textContent = "朝が来ました！チーズが無くなっています！";
+          speak("朝が来ました。全員目を覚ましてください。チーズが無くなっています！");
           
-          if (cheeseEaten) {
-            gmText.textContent = "朝が来ました！チーズが無くなっています！";
-            speak("朝が来ました。全員目を覚ましてください。チーズが無くなっています！");
-          } else {
-            gmText.textContent = "朝が来ました！なんと、誰も起きなかったためチーズはまだ残っています！";
-            speak("朝が来ました。誰も起きなかったため、チーズはまだ残っています！");
-          }
-
           setTimeout(() => {
             startDayPhase();
           }, 4500);
@@ -475,21 +509,7 @@
   }
 
   function skipToDayPhase() {
-    checkCheeseStatus();
     startDayPhase();
-  }
-
-  // チーズが食べられたか判定（泥棒と同じ出目のネズミが他にいるか、または全員違う時間か）
-  function checkCheeseStatus() {
-    const thief = players.find(p => p.isThief);
-    // 泥棒と同じ時間に起きた他のプレイヤー（ネズミ）がいるか？
-    const witnesses = players.filter(p => !p.isThief && p.dice === thief.dice);
-    
-    // ルール：もし誰も泥棒のタイミングと被らなかった場合、誰も泥棒を目撃できず、かつ特殊な状態になる
-    // 通常は「誰かが目撃したか、誰も起きなかったか」の判定。ここではシンプルに「泥棒と同じ時間の人が1人もいなければ、誰も目撃しなかった（またはチーズの状況が変わる）」
-    // ボードゲームの厳密なルールに合わせて：全員が寝ていて誰も目撃していない場合や、チーズが残った場合の判定に対応
-    cheeseEaten = true; // 基本はチーズは食べられている
-    // もし「誰も泥棒のタイミングに起きていない（目撃者が0人）」かつ「全員の起床時間がバラバラ」な場合のフラグとしても活用できます
   }
 
   // --- 昼フェーズ進行 ---
@@ -498,14 +518,7 @@
     discussionSec = parseInt(document.getElementById('discussion-time-limit').value, 10);
     
     const statusMsg = document.getElementById('morning-status-msg');
-    const thief = players.find(p => p.isThief);
-    const witnesses = players.filter(p => !p.isThief && p.dice === thief.dice);
-
-    if (witnesses.length > 0) {
-      statusMsg.textContent = `💡 ヒント: ${thief.dice}時のタイミングで誰かが物音に気づいているようです...？`;
-    } else {
-      statusMsg.textContent = `🤫 ヒント: ${thief.dice}時は誰も起きませんでした（誰も目撃者がいません）！`;
-    }
+    statusMsg.textContent = "誰がチーズを盗んだのか話し合ってください！";
 
     renderVotingList();
     updateTimerDisplay();
@@ -532,7 +545,7 @@
       } else {
         clearInterval(timerInterval);
         playMorningChime();
-        speak("議論時間終了です。投票を行ってください。");
+        speak("議論時間終了です。怪しい人に投票を行ってください。");
       }
     }, 1000);
   }
@@ -618,6 +631,7 @@
 
   function restartGame() {
     players.forEach(p => { p.votes = 0; p.checked = false; });
+    document.getElementById('setup-error').textContent = '';
     showView('view-setup');
   }
 
