@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版 (2人〜対応)</title>
+  <title>🧀 チーズは誰が食べた？ - CPU追加対応オンライン版</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -97,7 +97,15 @@
     </div>
     
     <div id="host-lobby-ui" class="host-panel" style="display:none;">
-      <p style="font-size:0.9rem; margin-bottom:10px;">※2〜7人集まったら開始してください</p>
+      <div style="margin-bottom: 12px; text-align: left; background: #0b1120; padding: 10px; border-radius: 8px;">
+        <label style="font-size:0.85rem; color:var(--info); display:block; margin-bottom:4px;">💻 CPU（コンピュータ）の追加</label>
+        <select id="cpu-count" style="font-size:0.9rem; padding:8px; margin-bottom:0;">
+          <option value="0" selected>追加しない (0人)</option>
+          <option value="1">1人追加</option>
+          <option value="2">2人追加</option>
+        </select>
+      </div>
+      <p style="font-size:0.9rem; margin-bottom:10px;">※参加者+CPUで2名以上になったら開始</p>
       <button onclick="hostStartGame()">ゲーム開始 (役職を配る)</button>
     </div>
     <div id="guest-lobby-ui" style="text-align:center; color:var(--text-muted); margin-top:20px;">
@@ -165,7 +173,7 @@
     </div>
 
     <div id="host-day-ui" class="host-panel" style="display:none;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">※全員の投票が終わったら結果発表へ</p>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">※全員の投票が終わったら結果発表へ（CPUの投票も自動処理されます）</p>
       <button class="danger" onclick="hostEndGame()">議論終了 ➔ 結果発表</button>
     </div>
   </div>
@@ -299,7 +307,7 @@
     initAudio();
     
     initPeer(() => {
-      gameState.players.push({ id: myPeerId, name: myName, isThief: false, dice: 0, votes: 0, connected: true });
+      gameState.players.push({ id: myPeerId, name: myName, isThief: false, dice: 0, votes: 0, connected: true, isCpu: false });
       peer.destroy();
       
       let hostId = "cheese-game-" + roomCode;
@@ -315,7 +323,6 @@
         connections[connection.peer] = connection;
         connection.on('data', data => handleGuestMessage(connection.peer, data));
         
-        // ゲスト切断時の処理
         connection.on('close', () => {
           let p = gameState.players.find(p => p.id === connection.peer);
           if(p) p.connected = false;
@@ -327,10 +334,9 @@
 
   function handleGuestMessage(peerId, msg) {
     if (msg.type === 'join') {
-      // ★修正①: 重複対策（名前で既存プレイヤーを検索し、いればIDを更新、いなければ新規追加）
       let existingPlayer = gameState.players.find(p => p.name === msg.name);
       if(!existingPlayer) {
-        gameState.players.push({ id: peerId, name: msg.name, isThief: false, dice: 0, votes: 0, connected: true });
+        gameState.players.push({ id: peerId, name: msg.name, isThief: false, dice: 0, votes: 0, connected: true, isCpu: false });
       } else {
         existingPlayer.id = peerId;
         existingPlayer.connected = true;
@@ -356,9 +362,25 @@
   }
 
   function hostStartGame() {
+    // 既存のCPUをリセット
+    gameState.players = gameState.players.filter(p => !p.isCpu);
+
+    // CPUを追加
+    let cpuCount = parseInt(document.getElementById('cpu-count').value, 10);
+    for(let i=1; i<=cpuCount; i++) {
+      gameState.players.push({
+        id: 'cpu_' + i, 
+        name: 'CPU ' + i, 
+        isThief: false, 
+        dice: 0, 
+        votes: 0, 
+        connected: true, 
+        isCpu: true
+      });
+    }
+
     let activePlayers = gameState.players.filter(p => p.connected);
-    // ★修正②: 2人以上でゲーム開始できるように変更
-    if(activePlayers.length < 2) return alert("2人以上必要です (現在"+activePlayers.length+"人)");
+    if(activePlayers.length < 2) return alert("参加者+CPUで2人以上必要です (現在"+activePlayers.length+"人)");
     
     let thiefIdx = Math.floor(Math.random() * activePlayers.length);
     activePlayers.forEach((p, i) => {
@@ -371,7 +393,6 @@
     broadcastState();
   }
 
-  // --- ホストの夜の自動進行処理 ---
   function hostStartNightAuto() {
     initAudio();
     gameState.phase = 'night';
@@ -397,7 +418,6 @@
     }
 
     if (gameState.nightHour > 6) {
-      // 朝フェーズへ
       gameState.phase = 'day';
       broadcastState();
       playMorningChime();
@@ -428,6 +448,15 @@
   }
 
   function hostEndGame() {
+    // CPUのランダム投票処理（自分以外の誰かに投票）
+    gameState.players.filter(p => p.isCpu).forEach(cpu => {
+      let targets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
+      if (targets.length > 0) {
+        let randTarget = targets[Math.floor(Math.random() * targets.length)];
+        randTarget.votes++;
+      }
+    });
+
     gameState.phase = 'result';
     broadcastState();
   }
@@ -435,6 +464,8 @@
   function hostRestartLobby() {
     clearTimeout(nightTimer);
     gameState.phase = 'lobby';
+    // 次回に備えてCPUをリストから削除しておく
+    gameState.players = gameState.players.filter(p => !p.isCpu);
     gameState.players.forEach(p => { p.dice=0; p.votes=0; p.isThief=false; });
     broadcastState();
   }
@@ -498,7 +529,6 @@
     document.getElementById('vote-status').style.display = 'block';
   }
 
-
   // === 共通 UI更新ロジック ===
   function updateUIFromState(state) {
     if(state.phase === 'lobby') {
@@ -524,7 +554,8 @@
     ul.innerHTML = '';
     let count = 0;
     gameState.players.forEach(p => {
-      if(p.connected) {
+      // ロビーでは人間の接続者のみ表示（CPUはゲーム開始時に追加されるため）
+      if(p.connected && !p.isCpu) {
         count++;
         ul.innerHTML += `<li>・${p.name} ${p.id===gameState.players[0].id ? '<span class="badge">ホスト</span>' : ''}</li>`;
       }
@@ -655,8 +686,9 @@
     gameState.players.forEach(p => {
       if(!p.connected) return;
       let r = p.isThief ? '<strong style="color:var(--danger)">[泥棒]</strong>' : '<span style="color:var(--text-muted)">[ネズミ]</span>';
+      let isCpu = p.isCpu ? '<span style="font-size:0.8rem; color:var(--info);">[CPU]</span>' : '';
       list.innerHTML += `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #475569; padding:8px 0;">
-        <span>${p.name} ${r}</span>
+        <span>${p.name} ${isCpu} ${r}</span>
         <span>${p.dice}時 / <strong>${p.votes}票</strong></span>
       </div>`;
     });
