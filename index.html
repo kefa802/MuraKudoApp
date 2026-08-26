@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版 (スキップ＆ワンタップ対応)</title>
+  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版 (CPU最大6人対応)</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -111,6 +111,10 @@
           <option value="0" selected>追加しない (0人)</option>
           <option value="1">1人追加</option>
           <option value="2">2人追加</option>
+          <option value="3">3人追加</option>
+          <option value="4">4人追加</option>
+          <option value="5">5人追加</option>
+          <option value="6">6人追加</option>
         </select>
       </div>
       <p style="font-size:0.9rem; margin-bottom:10px;">※参加者+CPUで2名以上になったら開始</p>
@@ -455,7 +459,7 @@
     }
   }
 
-  // ★ホスト専用のスキップ処理（タイマーをキャンセルして即時次へ進める）
+  // ★ホスト専用のスキップ処理
   function hostSkipNightStep() {
     if (!isHost || gameState.phase !== 'night' || gameState.nightHour > 6) return;
     clearTimeout(nightTimer);
@@ -521,7 +525,6 @@
       conn.send({ type: 'peek', targetName: targetName });
     }
     
-    // 覗き見後はボタン全体を無効化
     let peekBtns = document.getElementById('peek-buttons');
     peekBtns.style.pointerEvents = 'none';
     peekBtns.style.opacity = '0.5';
@@ -633,7 +636,6 @@
           compEl.innerHTML = '';
           peekEl.style.display = 'block';
           
-          // ★ボタンの生成処理
           let peekBtns = document.getElementById('peek-buttons');
           peekBtns.innerHTML = '';
           peekBtns.style.pointerEvents = 'auto';
@@ -641,7 +643,6 @@
           
           gameState.players.forEach(p => {
             if(p.name !== myName && p.connected) {
-              // onclickで直接引数を渡す
               peekBtns.innerHTML += `<button class="secondary" onclick="sendPeekRequest('${p.name}')">${p.name}</button>`;
             }
           });
@@ -654,7 +655,6 @@
       statusText.textContent = `${gameState.nightHour}時の人、目を閉じてください。`;
       secretUi.style.display = 'none';
       
-      // 目を閉じた時点で結果とボタンの状態をリセット
       document.getElementById('peek-result').innerHTML = '';
       let peekBtns = document.getElementById('peek-buttons');
       if(peekBtns) {
