@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - CPU追加対応オンライン版</title>
+  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版 (スキップ＆ワンタップ対応)</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -47,6 +47,14 @@
     .time-large { font-size: 3.5rem; font-weight: 900; color: var(--accent); text-align: center; margin: 10px 0; }
     .secret-ui { border: 2px solid var(--info); background: rgba(56, 189, 248, 0.1); padding: 16px; border-radius: 12px; margin-top: 16px; }
     .status-msg { text-align: center; font-size: 1.1rem; color: var(--text-muted); margin: 10px 0; }
+    
+    /* 覗き見ボタン用のレイアウト */
+    .peek-btn-grid {
+      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px;
+    }
+    .peek-btn-grid button {
+      width: auto; padding: 10px 16px; margin: 0; font-size: 0.95rem; flex: 1 1 calc(50% - 8px);
+    }
   </style>
 </head>
 <body>
@@ -67,7 +75,7 @@
         <h3 style="margin-bottom:10px; font-size:1.1rem;">ホストになる</h3>
         <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">部屋を作り、進行役を兼ねます。</p>
         
-        <label style="font-size:0.8rem; color:var(--text-muted); display:block; text-align:left; margin-bottom:4px;">待機時間（覗き見操作用）</label>
+        <label style="font-size:0.8rem; color:var(--text-muted); display:block; text-align:left; margin-bottom:4px;">待機時間（自動進行ペース）</label>
         <select id="step-duration" style="font-size:0.9rem; padding:8px;">
           <option value="6">6秒 (テンポ重視)</option>
           <option value="10" selected>10秒 (標準・おすすめ)</option>
@@ -145,17 +153,20 @@
       <div id="cheese-status-display" style="font-size:1.2rem; font-weight:bold; text-align:center; margin-bottom:15px; padding:10px; background:#0b1120; border-radius:8px;"></div>
       <div id="companions-display"></div>
       
-      <!-- 覗き見UI -->
+      <!-- 覗き見UI (ボタングリッドに変更) -->
       <div id="peek-container" style="display:none; margin-top:15px; border-top:1px solid #475569; padding-top:15px;">
-        <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:10px;">あなたは1人です。誰かの出目を確認できます。</p>
-        <select id="peek-target"></select>
-        <button class="secondary" onclick="sendPeekRequest()">確認する</button>
-        <div id="peek-result" style="margin-top:10px; font-weight:bold; color:var(--accent); text-align:center;"></div>
+        <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:10px; text-align:center;">あなたは1人です。誰かの出目を確認できます。</p>
+        <div id="peek-buttons" class="peek-btn-grid">
+          <!-- JSでボタンが生成されます -->
+        </div>
+        <div id="peek-result" style="margin-top:15px; font-weight:bold; color:var(--accent); text-align:center; font-size:1.1rem;"></div>
       </div>
     </div>
 
-    <div id="host-night-ui" class="host-panel" style="display:none; text-align:center; color:var(--accent); font-weight:bold;">
-      自動アナウンスで進行中です...
+    <!-- ホスト用スキップUI -->
+    <div id="host-night-ui" class="host-panel" style="display:none; text-align:center;">
+      <div style="color:var(--accent); font-weight:bold; margin-bottom: 12px;">自動アナウンスで進行中です...</div>
+      <button class="secondary" onclick="hostSkipNightStep()" style="font-size: 0.95rem; padding: 10px;">⏭️ 今の時間をスキップ (早送り)</button>
     </div>
   </div>
 
@@ -362,10 +373,7 @@
   }
 
   function hostStartGame() {
-    // 既存のCPUをリセット
     gameState.players = gameState.players.filter(p => !p.isCpu);
-
-    // CPUを追加
     let cpuCount = parseInt(document.getElementById('cpu-count').value, 10);
     for(let i=1; i<=cpuCount; i++) {
       gameState.players.push({
@@ -447,8 +455,14 @@
     }
   }
 
+  // ★ホスト専用のスキップ処理（タイマーをキャンセルして即時次へ進める）
+  function hostSkipNightStep() {
+    if (!isHost || gameState.phase !== 'night' || gameState.nightHour > 6) return;
+    clearTimeout(nightTimer);
+    hostAutoNightLoop();
+  }
+
   function hostEndGame() {
-    // CPUのランダム投票処理（自分以外の誰かに投票）
     gameState.players.filter(p => p.isCpu).forEach(cpu => {
       let targets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
       if (targets.length > 0) {
@@ -464,7 +478,6 @@
   function hostRestartLobby() {
     clearTimeout(nightTimer);
     gameState.phase = 'lobby';
-    // 次回に備えてCPUをリストから削除しておく
     gameState.players = gameState.players.filter(p => !p.isCpu);
     gameState.players.forEach(p => { p.dice=0; p.votes=0; p.isThief=false; });
     broadcastState();
@@ -499,18 +512,19 @@
     });
   }
 
-  function sendPeekRequest() {
-    let target = document.getElementById('peek-target').value;
-    if(!target) return alert("確認するプレイヤーを選んでください");
-    
+  // ★ワンタップ化した覗き見リクエストの送信処理
+  function sendPeekRequest(targetName) {
     if(isHost) {
-      let t = gameState.players.find(p => p.name === target);
+      let t = gameState.players.find(p => p.name === targetName);
       document.getElementById('peek-result').innerHTML = `🤫 出目は「<span style="font-size:1.5rem">${t.dice}時</span>」です。`;
     } else {
-      conn.send({ type: 'peek', targetName: target });
+      conn.send({ type: 'peek', targetName: targetName });
     }
-    document.getElementById('peek-target').disabled = true;
-    document.querySelector('#peek-container button').disabled = true;
+    
+    // 覗き見後はボタン全体を無効化
+    let peekBtns = document.getElementById('peek-buttons');
+    peekBtns.style.pointerEvents = 'none';
+    peekBtns.style.opacity = '0.5';
   }
 
   function submitVote() {
@@ -554,7 +568,6 @@
     ul.innerHTML = '';
     let count = 0;
     gameState.players.forEach(p => {
-      // ロビーでは人間の接続者のみ表示（CPUはゲーム開始時に追加されるため）
       if(p.connected && !p.isCpu) {
         count++;
         ul.innerHTML += `<li>・${p.name} ${p.id===gameState.players[0].id ? '<span class="badge">ホスト</span>' : ''}</li>`;
@@ -619,13 +632,19 @@
         } else {
           compEl.innerHTML = '';
           peekEl.style.display = 'block';
-          let sel = document.getElementById('peek-target');
-          if(sel.options.length <= 1) { 
-            sel.innerHTML = '<option value="">-- プレイヤーを選択 --</option>';
-            gameState.players.forEach(p => {
-              if(p.name !== myName && p.connected) sel.innerHTML += `<option value="${p.name}">${p.name}</option>`;
-            });
-          }
+          
+          // ★ボタンの生成処理
+          let peekBtns = document.getElementById('peek-buttons');
+          peekBtns.innerHTML = '';
+          peekBtns.style.pointerEvents = 'auto';
+          peekBtns.style.opacity = '1';
+          
+          gameState.players.forEach(p => {
+            if(p.name !== myName && p.connected) {
+              // onclickで直接引数を渡す
+              peekBtns.innerHTML += `<button class="secondary" onclick="sendPeekRequest('${p.name}')">${p.name}</button>`;
+            }
+          });
         }
       } else {
         secretUi.style.display = 'none';
@@ -634,9 +653,14 @@
     } else if (gameState.nightStep === 'close') {
       statusText.textContent = `${gameState.nightHour}時の人、目を閉じてください。`;
       secretUi.style.display = 'none';
+      
+      // 目を閉じた時点で結果とボタンの状態をリセット
       document.getElementById('peek-result').innerHTML = '';
-      document.getElementById('peek-target').disabled = false;
-      document.querySelector('#peek-container button').disabled = false;
+      let peekBtns = document.getElementById('peek-buttons');
+      if(peekBtns) {
+        peekBtns.style.pointerEvents = 'auto';
+        peekBtns.style.opacity = '1';
+      }
     }
   }
 
