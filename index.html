@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - 推理型CPU搭載版</title>
+  <title>🧀 チーズは誰が食べた？ - カウントダウン表示対応版</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -48,12 +48,21 @@
     .secret-ui { border: 2px solid var(--info); background: rgba(56, 189, 248, 0.1); padding: 16px; border-radius: 12px; margin-top: 16px; }
     .status-msg { text-align: center; font-size: 1.1rem; color: var(--text-muted); margin: 10px 0; }
     
-    /* 覗き見ボタン用のレイアウト */
     .peek-btn-grid {
       display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px;
     }
     .peek-btn-grid button {
       width: auto; padding: 10px 16px; margin: 0; font-size: 0.95rem; flex: 1 1 calc(50% - 8px);
+    }
+
+    /* カウントダウン用のスタイル */
+    #night-countdown {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: var(--danger);
+      text-align: center;
+      margin-top: 15px;
+      min-height: 2.2rem;
     }
   </style>
 </head>
@@ -150,6 +159,8 @@
     <div class="box" style="text-align:center; margin-top:20px;">
       <div id="night-clock-display" class="time-large">0:00</div>
       <div id="night-status-text" class="status-msg">目を閉じてください...</div>
+      <!-- ★カウントダウンタイマー表示領域 -->
+      <div id="night-countdown"></div>
     </div>
 
     <div id="night-secret-ui" class="secret-ui" style="display:none;">
@@ -157,17 +168,14 @@
       <div id="cheese-status-display" style="font-size:1.2rem; font-weight:bold; text-align:center; margin-bottom:15px; padding:10px; background:#0b1120; border-radius:8px;"></div>
       <div id="companions-display"></div>
       
-      <!-- 覗き見UI (ボタングリッドに変更) -->
       <div id="peek-container" style="display:none; margin-top:15px; border-top:1px solid #475569; padding-top:15px;">
         <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:10px; text-align:center;">あなたは1人です。誰かの出目を確認できます。</p>
         <div id="peek-buttons" class="peek-btn-grid">
-          <!-- JSでボタンが生成されます -->
         </div>
         <div id="peek-result" style="margin-top:15px; font-weight:bold; color:var(--accent); text-align:center; font-size:1.1rem;"></div>
       </div>
     </div>
 
-    <!-- ホスト用スキップUI -->
     <div id="host-night-ui" class="host-panel" style="display:none; text-align:center;">
       <div style="color:var(--accent); font-weight:bold; margin-bottom: 12px;">自動アナウンスで進行中です...</div>
       <button class="secondary" onclick="hostSkipNightStep()" style="font-size: 0.95rem; padding: 10px;">⏭️ 今の時間をスキップ (早送り)</button>
@@ -225,6 +233,7 @@
   let roomCode = "";
   let audioCtx = null;
   let nightTimer = null;
+  let localCountdownTimer = null; // ローカルでのカウントダウン処理用
   let stepSec = 10; 
 
   let gameState = {
@@ -232,7 +241,8 @@
     players: [], 
     nightHour: 0,
     nightStep: 'wait', 
-    cheeseEaten: false
+    cheeseEaten: false,
+    awakeEndTime: 0 // タイマー同期用タイムスタンプ
   };
 
   function showView(id) {
@@ -445,6 +455,9 @@
       let thief = gameState.players.find(p => p.isThief);
       if(gameState.nightHour >= thief.dice) gameState.cheeseEaten = true;
       
+      // ★同期用の終了タイムスタンプを設定
+      gameState.awakeEndTime = Date.now() + (stepSec * 1000);
+      
       broadcastState();
       playHourBell();
       speak(`${gameState.nightHour}時。${gameState.nightHour}時の人、目を開けてください。`);
@@ -452,6 +465,7 @@
       nightTimer = setTimeout(hostAutoNightLoop, stepSec * 1000);
       
     } else if (gameState.nightStep === 'close') {
+      gameState.awakeEndTime = 0;
       broadcastState();
       playTick();
       speak(`${gameState.nightHour}時の人、目を閉じてください。`);
@@ -459,45 +473,36 @@
     }
   }
 
-  // ★ホスト専用のスキップ処理
   function hostSkipNightStep() {
     if (!isHost || gameState.phase !== 'night' || gameState.nightHour > 6) return;
     clearTimeout(nightTimer);
     hostAutoNightLoop();
   }
 
-  // ★推理型CPUの投票ロジック実装
   function hostEndGame() {
     gameState.players.filter(p => p.isCpu).forEach(cpu => {
       let validTargets = [];
 
       if (cpu.isThief) {
-        // 泥棒CPU：自分以外の誰か（できれば人間）にランダム投票して紛れ込む
         validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
       } else {
-        // ネズミCPU：自分が夜に得た情報から容疑者を論理的に絞り込む
         let thief = gameState.players.find(p => p.isThief);
-        let cpuSawCheeseGone = (cpu.dice >= thief.dice); // CPUが起きた時にチーズがなかったか判定
+        let cpuSawCheeseGone = (cpu.dice >= thief.dice); 
 
         validTargets = gameState.players.filter(p => {
           if (p.id === cpu.id || !p.connected) return false;
-          
           if (cpuSawCheeseGone) {
-            // チーズが無かった ➔ 犯人は自分より早い時間（または同刻）
             return p.dice <= cpu.dice;
           } else {
-            // チーズがあった ➔ 犯人は自分より遅い時間
             return p.dice > cpu.dice;
           }
         });
       }
 
-      // 何らかの理由で候補がいなければ全員から選ぶ（フェイルセーフ）
       if (validTargets.length === 0) {
         validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
       }
 
-      // 絞り込んだ候補の中からランダムに1票を投じる
       if (validTargets.length > 0) {
         let randTarget = validTargets[Math.floor(Math.random() * validTargets.length)];
         randTarget.votes++;
@@ -545,7 +550,6 @@
     });
   }
 
-  // ワンタップ化した覗き見リクエストの送信処理
   function sendPeekRequest(targetName) {
     if(isHost) {
       let t = gameState.players.find(p => p.name === targetName);
@@ -629,6 +633,11 @@
     document.getElementById('night-clock-display').textContent = gameState.nightHour + ":00";
     let statusText = document.getElementById('night-status-text');
     let secretUi = document.getElementById('night-secret-ui');
+    let countdownEl = document.getElementById('night-countdown');
+    
+    // カウントダウンタイマーのリセット
+    clearInterval(localCountdownTimer);
+    countdownEl.textContent = '';
     
     if (gameState.nightHour === 0) {
       statusText.textContent = "全員目を閉じてください...";
@@ -638,6 +647,20 @@
 
     if (gameState.nightStep === 'awake') {
       statusText.innerHTML = `<strong style="color:var(--accent)">${gameState.nightHour}時の人</strong>、目を開けてください。`;
+      
+      // ★カウントダウンの開始処理
+      if (gameState.awakeEndTime) {
+        const updateTimer = () => {
+          let remain = Math.max(0, Math.ceil((gameState.awakeEndTime - Date.now()) / 1000));
+          countdownEl.textContent = `⏳ 残り ${remain} 秒`;
+          if (remain <= 0) {
+            countdownEl.textContent = "⏳ まもなく終了...";
+            clearInterval(localCountdownTimer);
+          }
+        };
+        updateTimer(); // 即時反映
+        localCountdownTimer = setInterval(updateTimer, 500); // 0.5秒おきにチェック
+      }
       
       if(me && me.dice === gameState.nightHour) {
         secretUi.style.display = 'block';
