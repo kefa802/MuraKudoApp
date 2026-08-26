@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - 完全自動オンライン版 (CPU最大6人対応)</title>
+  <title>🧀 チーズは誰が食べた？ - 推理型CPU搭載版</title>
   <!-- PeerJS for WebRTC Peer-to-Peer communication -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
@@ -188,7 +188,7 @@
     </div>
 
     <div id="host-day-ui" class="host-panel" style="display:none;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">※全員の投票が終わったら結果発表へ（CPUの投票も自動処理されます）</p>
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">※全員の投票が終わったら結果発表へ（CPUの賢い投票も自動処理されます）</p>
       <button class="danger" onclick="hostEndGame()">議論終了 ➔ 結果発表</button>
     </div>
   </div>
@@ -466,11 +466,40 @@
     hostAutoNightLoop();
   }
 
+  // ★推理型CPUの投票ロジック実装
   function hostEndGame() {
     gameState.players.filter(p => p.isCpu).forEach(cpu => {
-      let targets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
-      if (targets.length > 0) {
-        let randTarget = targets[Math.floor(Math.random() * targets.length)];
+      let validTargets = [];
+
+      if (cpu.isThief) {
+        // 泥棒CPU：自分以外の誰か（できれば人間）にランダム投票して紛れ込む
+        validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
+      } else {
+        // ネズミCPU：自分が夜に得た情報から容疑者を論理的に絞り込む
+        let thief = gameState.players.find(p => p.isThief);
+        let cpuSawCheeseGone = (cpu.dice >= thief.dice); // CPUが起きた時にチーズがなかったか判定
+
+        validTargets = gameState.players.filter(p => {
+          if (p.id === cpu.id || !p.connected) return false;
+          
+          if (cpuSawCheeseGone) {
+            // チーズが無かった ➔ 犯人は自分より早い時間（または同刻）
+            return p.dice <= cpu.dice;
+          } else {
+            // チーズがあった ➔ 犯人は自分より遅い時間
+            return p.dice > cpu.dice;
+          }
+        });
+      }
+
+      // 何らかの理由で候補がいなければ全員から選ぶ（フェイルセーフ）
+      if (validTargets.length === 0) {
+        validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
+      }
+
+      // 絞り込んだ候補の中からランダムに1票を投じる
+      if (validTargets.length > 0) {
+        let randTarget = validTargets[Math.floor(Math.random() * validTargets.length)];
         randTarget.votes++;
       }
     });
@@ -516,7 +545,7 @@
     });
   }
 
-  // ★ワンタップ化した覗き見リクエストの送信処理
+  // ワンタップ化した覗き見リクエストの送信処理
   function sendPeekRequest(targetName) {
     if(isHost) {
       let t = gameState.players.find(p => p.name === targetName);
