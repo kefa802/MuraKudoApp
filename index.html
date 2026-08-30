@@ -3,8 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🧀 チーズは誰が食べた？ - カウントダウン表示対応版</title>
-  <!-- PeerJS for WebRTC Peer-to-Peer communication -->
+  <title>ボードゲームアリーナ mini (チーズ / シティチェイス)</title>
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     :root {
@@ -19,204 +18,307 @@
       display: flex; flex-direction: column; align-items: center; padding: 16px;
     }
     .container {
-      width: 100%; max-width: 500px; background: var(--panel);
+      width: 100%; max-width: 540px; background: var(--panel);
       border-radius: 16px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
-    h1 { text-align: center; font-size: 1.5rem; color: var(--accent); margin-bottom: 20px; }
+    h1 { text-align: center; font-size: 1.4rem; color: var(--accent); margin-bottom: 16px; }
     .view { display: none; }
     .view.active { display: block; }
     input, select {
       width: 100%; background: #0b1120; border: 1px solid #475569;
-      color: #fff; padding: 12px; border-radius: 8px; font-size: 1rem; margin-bottom: 12px;
+      color: #fff; padding: 10px; border-radius: 8px; font-size: 1rem; margin-bottom: 10px;
     }
     button {
       width: 100%; background: var(--accent); color: #0f172a; border: none;
-      padding: 14px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer;
-      margin-bottom: 10px;
-      transition: opacity 0.2s;
+      padding: 12px; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer;
+      margin-bottom: 10px; transition: 0.2s;
     }
     button:active { transform: scale(0.98); }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
     button.secondary { background: #475569; color: #fff; }
     button.danger { background: var(--danger); color: #fff; }
     button.success { background: var(--success); color: #0f172a; }
-    .box { background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 12px; }
-    .badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; background: #475569; }
+    button.info { background: var(--info); color: #0f172a; }
+    .box { background: var(--card); padding: 14px; border-radius: 12px; margin-bottom: 12px; }
+    .badge { display: inline-block; padding: 3px 6px; border-radius: 4px; font-size: 0.75rem; background: #475569; }
     
-    .host-panel { border: 2px dashed var(--accent); padding: 16px; border-radius: 12px; background: rgba(245, 158, 11, 0.05); margin-top:20px; }
-    .time-large { font-size: 3.5rem; font-weight: 900; color: var(--accent); text-align: center; margin: 10px 0; }
-    .secret-ui { border: 2px solid var(--info); background: rgba(56, 189, 248, 0.1); padding: 16px; border-radius: 12px; margin-top: 16px; }
-    .status-msg { text-align: center; font-size: 1.1rem; color: var(--text-muted); margin: 10px 0; }
+    .host-panel { border: 2px dashed var(--accent); padding: 14px; border-radius: 12px; background: rgba(245, 158, 11, 0.05); margin-top:14px; }
+    .time-large { font-size: 3rem; font-weight: 900; color: var(--accent); text-align: center; margin: 8px 0; }
+    .secret-ui { border: 2px solid var(--info); background: rgba(56, 189, 248, 0.1); padding: 14px; border-radius: 12px; margin-top: 14px; }
+    .status-msg { text-align: center; font-size: 1rem; color: var(--text-muted); margin: 8px 0; }
     
-    .peek-btn-grid {
-      display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px;
+    .peek-btn-grid { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px; }
+    .peek-btn-grid button { width: auto; padding: 8px 12px; margin: 0; font-size: 0.9rem; flex: 1 1 calc(50% - 8px); }
+    #night-countdown { font-size: 1.6rem; font-weight: bold; color: var(--danger); text-align: center; margin-top: 10px; min-height: 2rem; }
+
+    /* --- ゲーム選択ラジオボタン --- */
+    .game-select-group {
+      display: flex; gap: 8px; margin-bottom: 12px;
     }
-    .peek-btn-grid button {
-      width: auto; padding: 10px 16px; margin: 0; font-size: 0.95rem; flex: 1 1 calc(50% - 8px);
+    .game-select-btn {
+      flex: 1; padding: 10px; border-radius: 8px; border: 2px solid #475569;
+      background: #0b1120; color: #fff; text-align: center; cursor: pointer; font-size: 0.9rem; font-weight: bold;
+    }
+    .game-select-btn.active {
+      border-color: var(--accent); background: rgba(245, 158, 11, 0.15); color: var(--accent);
     }
 
-    /* カウントダウン用のスタイル */
-    #night-countdown {
-      font-size: 1.8rem;
-      font-weight: bold;
-      color: var(--danger);
-      text-align: center;
-      margin-top: 15px;
-      min-height: 2.2rem;
+    /* --- シティチェイス用スタイル --- */
+    .grid-board {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      margin: 14px auto;
+      max-width: 380px;
+      perspective: 800px;
+    }
+    .grid-cell {
+      aspect-ratio: 1;
+      background: #1e293b;
+      border: 1px solid #475569;
+      border-radius: 8px;
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      user-select: none;
+    }
+    .grid-cell.highlight {
+      border: 2px solid var(--accent);
+      background: rgba(245, 158, 11, 0.2);
+    }
+    .grid-cell.searchable {
+      border: 2px dashed var(--info);
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { background: rgba(56, 189, 248, 0.1); }
+      50% { background: rgba(56, 189, 248, 0.35); }
+    }
+    .building {
+      position: absolute;
+      inset: 4px;
+      background: #475569;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.4);
+      transition: transform 0.4s ease, opacity 0.4s ease;
+      z-index: 2;
+      color: #94a3b8;
+      font-size: 1.2rem;
+    }
+    .building.lifted {
+      transform: translateY(-24px) scale(0.9);
+      opacity: 0.7;
+    }
+    .car-icon {
+      font-size: 1.5rem;
+      z-index: 1;
+    }
+    .heli-icon {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      font-size: 1.4rem;
+      z-index: 3;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
     }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h1>🧀 チーズは誰が食べた？ <span style="font-size:0.8rem; opacity:0.7;">Online</span></h1>
-  <div id="connection-status" style="text-align:center; color:var(--info); font-size:0.9rem; margin-bottom:10px;"></div>
+  <h1 id="main-title">🎲 ボードゲーム Online</h1>
+  <div id="connection-status" style="text-align:center; color:var(--info); font-size:0.85rem; margin-bottom:10px;"></div>
 
-  <!-- 1. トップ画面 -->
   <div id="view-home" class="view active">
     <div class="box">
-      <label>あなたの名前</label>
+      <label style="font-size:0.9rem; color:var(--text-muted);">あなたの名前</label>
       <input type="text" id="player-name" placeholder="名前を入力">
     </div>
     
-    <div style="display:flex; gap:10px; margin-top:20px;">
-      <div style="flex:1; border: 1px solid #475569; padding:16px; border-radius:8px; text-align:center;">
-        <h3 style="margin-bottom:10px; font-size:1.1rem;">ホストになる</h3>
-        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:10px;">部屋を作り、進行役を兼ねます。</p>
-        
-        <label style="font-size:0.8rem; color:var(--text-muted); display:block; text-align:left; margin-bottom:4px;">待機時間（自動進行ペース）</label>
-        <select id="step-duration" style="font-size:0.9rem; padding:8px;">
-          <option value="6">6秒 (テンポ重視)</option>
-          <option value="10" selected>10秒 (標準・おすすめ)</option>
-          <option value="15">15秒 (ゆったり)</option>
-        </select>
-        
+    <div style="display:flex; gap:10px; margin-top:10px;">
+      <div style="flex:1; border: 1px solid #475569; padding:14px; border-radius:8px; text-align:center;">
+        <h3 style="margin-bottom:8px; font-size:1rem;">ホストになる</h3>
+        <p style="font-size:0.75rem; color:var(--text-muted); margin-bottom:10px;">部屋を作り、ゲームを選択して進行します。</p>
         <button class="success" onclick="createRoom()">部屋を作る</button>
       </div>
-      <div style="flex:1; border: 1px solid #475569; padding:16px; border-radius:8px; text-align:center;">
-        <h3 style="margin-bottom:10px; font-size:1.1rem;">ゲストとして参加</h3>
+      <div style="flex:1; border: 1px solid #475569; padding:14px; border-radius:8px; text-align:center;">
+        <h3 style="margin-bottom:8px; font-size:1rem;">ゲストとして参加</h3>
         <input type="text" id="room-code-input" placeholder="部屋コード(4桁)" maxlength="4" style="text-align:center; letter-spacing:4px; font-weight:bold;">
         <button onclick="joinRoom()">参加する</button>
       </div>
     </div>
   </div>
 
-  <!-- 2. ロビー画面 -->
   <div id="view-lobby" class="view">
-    <h2 style="text-align:center;">待機室</h2>
-    <div class="box" style="text-align:center;">
-      <p style="color:var(--text-muted); font-size:0.9rem;">部屋コード (このコードを共有してください)</p>
-      <div id="room-code-display" style="font-size:2.5rem; font-weight:bold; letter-spacing:4px; color:var(--accent); margin:10px 0;">----</div>
+    <h2 style="text-align:center; font-size:1.2rem; margin-bottom:10px;">待機室</h2>
+    <div class="box" style="text-align:center; padding:10px;">
+      <p style="color:var(--text-muted); font-size:0.8rem;">部屋コード (共有してください)</p>
+      <div id="room-code-display" style="font-size:2.2rem; font-weight:bold; letter-spacing:4px; color:var(--accent); margin:4px 0;">----</div>
     </div>
+
+    <div class="box">
+      <label style="font-size:0.85rem; color:var(--text-muted); display:block; margin-bottom:6px;">プレイするゲームの選択</label>
+      <div class="game-select-group">
+        <div id="select-game-cheese" class="game-select-btn active" onclick="hostChangeGameType('cheese')">
+          🧀 チーズは誰が食べた？
+        </div>
+        <div id="select-game-city" class="game-select-btn" onclick="hostChangeGameType('city')">
+          🚁 シティチェイス
+        </div>
+      </div>
+      <p id="game-desc-display" style="font-size:0.8rem; color:var(--info);"></p>
+    </div>
+
     <div class="box">
       <h3>参加者 (<span id="player-count">0</span>人)</h3>
-      <ul id="lobby-players" style="list-style:none; margin-top:10px; line-height:1.8;"></ul>
+      <ul id="lobby-players" style="list-style:none; margin-top:8px; line-height:1.6; font-size:0.95rem;"></ul>
     </div>
     
     <div id="host-lobby-ui" class="host-panel" style="display:none;">
-      <div style="margin-bottom: 12px; text-align: left; background: #0b1120; padding: 10px; border-radius: 8px;">
-        <label style="font-size:0.85rem; color:var(--info); display:block; margin-bottom:4px;">💻 CPU（コンピュータ）の追加</label>
-        <select id="cpu-count" style="font-size:0.9rem; padding:8px; margin-bottom:0;">
-          <option value="0" selected>追加しない (0人)</option>
+      <div id="opt-cheese" style="margin-bottom: 10px;">
+        <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:2px;">待機時間（自動進行ペース）</label>
+        <select id="step-duration" onchange="hostUpdateSettings()" style="font-size:0.85rem; padding:6px;">
+          <option value="6">6秒 (テンポ重視)</option>
+          <option value="10" selected>10秒 (標準)</option>
+          <option value="15">15秒 (ゆったり)</option>
+        </select>
+        <label style="font-size:0.8rem; color:var(--info); display:block; margin-bottom:2px;">💻 CPUの追加</label>
+        <select id="cpu-count" onchange="hostUpdateSettings()" style="font-size:0.85rem; padding:6px; margin-bottom:0;">
+          <option value="0" selected>なし (0人)</option>
           <option value="1">1人追加</option>
           <option value="2">2人追加</option>
           <option value="3">3人追加</option>
           <option value="4">4人追加</option>
           <option value="5">5人追加</option>
-          <option value="6">6人追加</option>
         </select>
       </div>
-      <p style="font-size:0.9rem; margin-bottom:10px;">※参加者+CPUで2名以上になったら開始</p>
-      <button onclick="hostStartGame()">ゲーム開始 (役職を配る)</button>
+
+      <div id="opt-city" style="display:none; margin-bottom: 10px;">
+        <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:2px;">ホストの役割</label>
+        <select id="city-host-role" onchange="hostUpdateSettings()" style="font-size:0.85rem; padding:6px;">
+          <option value="police" selected>🚁 警察 (ヘリコプター)</option>
+          <option value="thief">🚗 犯人 (逃走車)</option>
+        </select>
+        <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:2px;">対戦相手</label>
+        <select id="city-opponent" onchange="hostUpdateSettings()" style="font-size:0.85rem; padding:6px; margin-bottom:0;">
+          <option value="player" selected>参加プレイヤー（2人対戦）</option>
+          <option value="cpu">💻 CPUと対戦（1人プレイ）</option>
+        </select>
+      </div>
+
+      <button id="start-game-btn" onclick="hostStartSelectedGame()">ゲーム開始</button>
     </div>
-    <div id="guest-lobby-ui" style="text-align:center; color:var(--text-muted); margin-top:20px;">
-      ホストがゲームを開始するのを待っています...
+
+    <div id="guest-lobby-ui" style="text-align:center; color:var(--text-muted); margin-top:14px; font-size:0.9rem;">
+      ホストがゲームを選択・開始するのを待っています...
     </div>
   </div>
 
-  <!-- 3. 役職確認画面 -->
-  <div id="view-check" class="view">
+  <div id="view-cheese-check" class="view">
     <h2 style="text-align:center;">あなたの情報</h2>
-    <div class="box" style="text-align:center; margin-top:20px;">
+    <div class="box" style="text-align:center; margin-top:14px;">
       <p style="color:var(--text-muted);">あなたの正体は...</p>
-      <div id="my-role-display" style="font-size:1.5rem; font-weight:bold; margin:10px 0;"></div>
-      <p style="color:var(--text-muted); margin-top:10px;">あなたの起床時間</p>
+      <div id="my-role-display" style="font-size:1.4rem; font-weight:bold; margin:8px 0;"></div>
+      <p style="color:var(--text-muted); margin-top:6px;">あなたの起床時間</p>
       <div id="my-dice-display" class="time-large"></div>
-      <p id="my-desc-display" style="font-size:0.9rem;"></p>
+      <p id="my-desc-display" style="font-size:0.85rem;"></p>
     </div>
-
     <div id="host-check-ui" class="host-panel" style="display:none;">
       <button onclick="hostStartNightAuto()">全員確認完了 ➔ 夜フェーズ(自動)を開始</button>
     </div>
-    <div id="guest-check-ui" style="text-align:center; color:var(--text-muted); margin-top:20px;">
+    <div id="guest-check-ui" style="text-align:center; color:var(--text-muted); margin-top:14px;">
       ホストが夜フェーズに進めるのを待っています...
     </div>
   </div>
 
-  <!-- 4. 夜フェーズ -->
-  <div id="view-night" class="view">
-    <h2 style="text-align:center; color:#4338ca;">🌙 夜フェーズ</h2>
-    <div class="box" style="text-align:center; margin-top:20px;">
+  <div id="view-cheese-night" class="view">
+    <h2 style="text-align:center; color:#818cf8;">🌙 夜フェーズ</h2>
+    <div class="box" style="text-align:center; margin-top:14px;">
       <div id="night-clock-display" class="time-large">0:00</div>
       <div id="night-status-text" class="status-msg">目を閉じてください...</div>
-      <!-- ★カウントダウンタイマー表示領域 -->
       <div id="night-countdown"></div>
     </div>
-
     <div id="night-secret-ui" class="secret-ui" style="display:none;">
-      <h3 style="color:var(--accent); text-align:center; margin-bottom:10px;">👀 あなたの時間です！</h3>
-      <div id="cheese-status-display" style="font-size:1.2rem; font-weight:bold; text-align:center; margin-bottom:15px; padding:10px; background:#0b1120; border-radius:8px;"></div>
+      <h3 style="color:var(--accent); text-align:center; margin-bottom:8px;">👀 あなたの時間です！</h3>
+      <div id="cheese-status-display" style="font-size:1.1rem; font-weight:bold; text-align:center; margin-bottom:10px; padding:8px; background:#0b1120; border-radius:8px;"></div>
       <div id="companions-display"></div>
-      
-      <div id="peek-container" style="display:none; margin-top:15px; border-top:1px solid #475569; padding-top:15px;">
-        <p style="font-size:0.9rem; color:var(--text-muted); margin-bottom:10px; text-align:center;">あなたは1人です。誰かの出目を確認できます。</p>
-        <div id="peek-buttons" class="peek-btn-grid">
-        </div>
-        <div id="peek-result" style="margin-top:15px; font-weight:bold; color:var(--accent); text-align:center; font-size:1.1rem;"></div>
+      <div id="peek-container" style="display:none; margin-top:10px; border-top:1px solid #475569; padding-top:10px;">
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:8px; text-align:center;">あなたは1人です。誰かの出目を確認できます。</p>
+        <div id="peek-buttons" class="peek-btn-grid"></div>
+        <div id="peek-result" style="margin-top:10px; font-weight:bold; color:var(--accent); text-align:center;"></div>
       </div>
     </div>
-
     <div id="host-night-ui" class="host-panel" style="display:none; text-align:center;">
-      <div style="color:var(--accent); font-weight:bold; margin-bottom: 12px;">自動アナウンスで進行中です...</div>
-      <button class="secondary" onclick="hostSkipNightStep()" style="font-size: 0.95rem; padding: 10px;">⏭️ 今の時間をスキップ (早送り)</button>
+      <div style="color:var(--accent); font-weight:bold; margin-bottom: 8px;">自動進行中...</div>
+      <button class="secondary" onclick="hostSkipNightStep()" style="font-size: 0.9rem; padding: 8px;">⏭️ 今の時間をスキップ</button>
     </div>
   </div>
 
-  <!-- 5. 昼フェーズ -->
-  <div id="view-day" class="view">
+  <div id="view-cheese-day" class="view">
     <h2 style="text-align:center; color:#0284c7;">☀️ 朝が来ました</h2>
-    <div class="box" style="margin-top:20px;">
-      <h3 id="day-cheese-msg" style="text-align:center; color:var(--accent); margin-bottom:20px;"></h3>
-      <p style="text-align:center; color:var(--text-muted); margin-bottom:10px;">誰が怪しいか話し合い、投票してください。</p>
-      <select id="vote-target" style="padding:16px; font-size:1.1rem; text-align:center;">
+    <div class="box" style="margin-top:14px;">
+      <h3 id="day-cheese-msg" style="text-align:center; color:var(--accent); margin-bottom:14px;"></h3>
+      <p style="text-align:center; color:var(--text-muted); margin-bottom:10px; font-size:0.9rem;">誰が怪しいか話し合い、投票してください。</p>
+      <select id="vote-target" style="padding:12px; font-size:1rem; text-align:center;">
         <option value="">-- 投票先を選ぶ --</option>
       </select>
       <button id="submit-vote-btn" class="danger" onclick="submitVote()">投票する</button>
-      <p id="vote-status" style="text-align:center; color:var(--success); font-weight:bold; display:none; margin-top:10px;">投票完了！</p>
+      <p id="vote-status" style="text-align:center; color:var(--success); font-weight:bold; display:none; margin-top:8px;">投票完了！</p>
     </div>
-
     <div id="host-day-ui" class="host-panel" style="display:none;">
-      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:10px;">※全員の投票が終わったら結果発表へ（CPUの賢い投票も自動処理されます）</p>
       <button class="danger" onclick="hostEndGame()">議論終了 ➔ 結果発表</button>
     </div>
   </div>
 
-  <!-- 6. 結果発表 -->
-  <div id="view-result" class="view">
+  <div id="view-cheese-result" class="view">
     <h2 style="text-align:center; color:var(--danger);">🏆 結末</h2>
-    <div class="box" style="text-align:center; margin-top:20px;">
-      <div id="result-verdict" style="font-size:1.2rem; font-weight:bold; margin-bottom:15px;"></div>
-      <p style="color:var(--text-muted); font-size:0.9rem;">チーズ泥棒だったのは...</p>
-      <div id="result-thief-name" style="font-size:2rem; font-weight:bold; color:var(--danger); margin:10px 0;"></div>
-      <div>起床時間: <strong id="result-thief-time" style="color:var(--accent); font-size:1.2rem;"></strong></div>
+    <div class="box" style="text-align:center; margin-top:14px;">
+      <div id="result-verdict" style="font-size:1.15rem; font-weight:bold; margin-bottom:10px;"></div>
+      <p style="color:var(--text-muted); font-size:0.85rem;">チーズ泥棒だったのは...</p>
+      <div id="result-thief-name" style="font-size:1.8rem; font-weight:bold; color:var(--danger); margin:6px 0;"></div>
+      <div>起床時間: <strong id="result-thief-time" style="color:var(--accent);"></strong></div>
     </div>
-    
     <div class="box">
-      <h3>全員の内訳と得票</h3>
-      <div id="result-list" style="margin-top:10px; line-height:2;"></div>
+      <h3 style="font-size:1rem;">全員の内訳と得票</h3>
+      <div id="result-list" style="margin-top:8px; line-height:1.8; font-size:0.9rem;"></div>
+    </div>
+    <div id="host-result-ui" class="host-panel" style="display:none;">
+      <button onclick="hostRestartLobby()">ロビーに戻る</button>
+    </div>
+  </div>
+
+  <div id="view-city-game" class="view">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2 style="font-size:1.1rem; color:var(--accent);">🚁 シティチェイス</h2>
+      <div style="font-size:0.9rem;">逃走ターン: <strong id="city-turn-count" style="color:var(--accent); font-size:1.2rem;">1</strong> / 10</div>
     </div>
 
-    <div id="host-result-ui" class="host-panel" style="display:none;">
+    <div class="box" style="padding:10px; text-align:center;">
+      <div style="font-size:0.85rem; color:var(--text-muted);">あなたの役割: <strong id="city-my-role" style="color:#fff;"></strong></div>
+      <div id="city-action-msg" style="font-size:1.05rem; font-weight:bold; color:var(--info); margin-top:4px;"></div>
+    </div>
+
+    <div id="city-board" class="grid-board"></div>
+
+    <div id="city-police-controls" class="box" style="display:none; text-align:center;">
+      <p id="police-hint" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">周囲のビルをクリックして車を捜索してください</p>
+      <button class="secondary" id="city-end-turn-btn" onclick="cityPoliceFinishSearch()" style="display:none;">探索終了（犯人ターンへ）</button>
+    </div>
+
+    <div id="city-thief-controls" class="box" style="display:none; text-align:center;">
+      <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:6px;">隣接するマスをタップして移動、またはその場に潜伏</p>
+      <button class="info" onclick="cityThiefStay()">この場所に留まる (潜伏)</button>
+    </div>
+
+    <div class="box" style="padding:10px; max-height:80px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted);" id="city-log"></div>
+
+    <div id="host-city-end-ui" class="host-panel" style="display:none; margin-top:10px;">
       <button onclick="hostRestartLobby()">ロビーに戻る</button>
     </div>
   </div>
@@ -233,21 +335,40 @@
   let roomCode = "";
   let audioCtx = null;
   let nightTimer = null;
-  let localCountdownTimer = null; // ローカルでのカウントダウン処理用
+  let localCountdownTimer = null;
   let stepSec = 10; 
 
+  // 全体ゲームステート
   let gameState = {
+    selectedGame: 'cheese', // 'cheese' or 'city'
     phase: 'lobby', 
     players: [], 
+    
+    // チーズ用ステート
     nightHour: 0,
     nightStep: 'wait', 
     cheeseEaten: false,
-    awakeEndTime: 0 // タイマー同期用タイムスタンプ
+    awakeEndTime: 0,
+
+    // シティチェイス用ステート
+    city: {
+      turn: 1,
+      maxTurns: 10,
+      turnPhase: 'thief_move', // 'thief_move', 'police_move', 'police_search', 'ended'
+      policePos: { x: 2, y: 2 },
+      thiefPos: { x: 0, y: 0 },
+      liftedBuildings: [], // [{x, y}]
+      winner: null, // 'police' or 'thief'
+      hostRole: 'police', // 'police' or 'thief'
+      isCpuOpponent: false,
+      logs: []
+    }
   };
 
   function showView(id) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+    let target = document.getElementById(id);
+    if(target) target.classList.add('active');
     
     document.getElementById('host-lobby-ui').style.display = isHost ? 'block' : 'none';
     document.getElementById('guest-lobby-ui').style.display = isHost ? 'none' : 'block';
@@ -288,6 +409,10 @@
   }
   function playTick() { playTone(800, 'triangle', 0.05); }
   function playHourBell() { playTone(523.25, 'sine', 0.6); }
+  function playCatchSound() {
+    playTone(300, 'sawtooth', 0.2);
+    setTimeout(() => playTone(600, 'sawtooth', 0.3), 150);
+  }
   function playMorningChime() {
     playTone(440, 'sine', 0.4);
     setTimeout(() => playTone(554.37, 'sine', 0.4), 150);
@@ -325,7 +450,6 @@
   function createRoom() {
     myName = document.getElementById('player-name').value.trim();
     if(!myName) return alert("名前を入力してください");
-    stepSec = parseInt(document.getElementById('step-duration').value, 10);
     
     isHost = true;
     roomCode = generateRoomCode();
@@ -375,6 +499,8 @@
     } else if (msg.type === 'vote') {
       let target = gameState.players.find(p => p.name === msg.targetName);
       if(target) target.votes++;
+    } else if (msg.type === 'city_action') {
+      handleCityAction(msg.action, msg.payload);
     }
   }
 
@@ -386,18 +512,36 @@
     }
   }
 
-  function hostStartGame() {
+  // --- ホスト操作: ゲーム選択 & 設定更新 ---
+  function hostChangeGameType(type) {
+    if (!isHost) return;
+    gameState.selectedGame = type;
+    broadcastState();
+  }
+
+  function hostUpdateSettings() {
+    if (!isHost) return;
+    stepSec = parseInt(document.getElementById('step-duration').value, 10);
+    gameState.city.hostRole = document.getElementById('city-host-role').value;
+    gameState.city.isCpuOpponent = document.getElementById('city-opponent').value === 'cpu';
+    broadcastState();
+  }
+
+  function hostStartSelectedGame() {
+    if (gameState.selectedGame === 'cheese') {
+      hostStartCheeseGame();
+    } else {
+      hostStartCityChaseGame();
+    }
+  }
+
+  // ==================== チーズの処理 ====================
+  function hostStartCheeseGame() {
     gameState.players = gameState.players.filter(p => !p.isCpu);
     let cpuCount = parseInt(document.getElementById('cpu-count').value, 10);
     for(let i=1; i<=cpuCount; i++) {
       gameState.players.push({
-        id: 'cpu_' + i, 
-        name: 'CPU ' + i, 
-        isThief: false, 
-        dice: 0, 
-        votes: 0, 
-        connected: true, 
-        isCpu: true
+        id: 'cpu_' + i, name: 'CPU ' + i, isThief: false, dice: 0, votes: 0, connected: true, isCpu: true
       });
     }
 
@@ -411,13 +555,13 @@
       p.votes = 0;
     });
     
-    gameState.phase = 'check';
+    gameState.phase = 'cheese_check';
     broadcastState();
   }
 
   function hostStartNightAuto() {
     initAudio();
-    gameState.phase = 'night';
+    gameState.phase = 'cheese_night';
     gameState.nightHour = 0;
     gameState.nightStep = 'wait';
     gameState.cheeseEaten = false;
@@ -425,7 +569,7 @@
     
     speak("夜になりました。全員目を閉じてください。");
     clearTimeout(nightTimer);
-    nightTimer = setTimeout(hostAutoNightLoop, 5000); 
+    nightTimer = setTimeout(hostAutoNightLoop, 4000); 
   }
 
   function hostAutoNightLoop() {
@@ -440,14 +584,10 @@
     }
 
     if (gameState.nightHour > 6) {
-      gameState.phase = 'day';
+      gameState.phase = 'cheese_day';
       broadcastState();
       playMorningChime();
-      if(gameState.cheeseEaten) {
-        speak("朝が来ました。全員目を覚ましてください。チーズが無くなっています！");
-      } else {
-        speak("朝が来ました。全員目を覚ましてください。チーズはまだ残っています！");
-      }
+      speak(gameState.cheeseEaten ? "朝が来ました。全員目を覚ましてください。チーズが無くなっています！" : "朝が来ました。全員目を覚ましてください。チーズはまだ残っています！");
       return;
     }
 
@@ -455,13 +595,10 @@
       let thief = gameState.players.find(p => p.isThief);
       if(gameState.nightHour >= thief.dice) gameState.cheeseEaten = true;
       
-      // ★同期用の終了タイムスタンプを設定
       gameState.awakeEndTime = Date.now() + (stepSec * 1000);
-      
       broadcastState();
       playHourBell();
       speak(`${gameState.nightHour}時。${gameState.nightHour}時の人、目を開けてください。`);
-      
       nightTimer = setTimeout(hostAutoNightLoop, stepSec * 1000);
       
     } else if (gameState.nightStep === 'close') {
@@ -474,7 +611,7 @@
   }
 
   function hostSkipNightStep() {
-    if (!isHost || gameState.phase !== 'night' || gameState.nightHour > 6) return;
+    if (!isHost || gameState.phase !== 'cheese_night' || gameState.nightHour > 6) return;
     clearTimeout(nightTimer);
     hostAutoNightLoop();
   }
@@ -482,39 +619,204 @@
   function hostEndGame() {
     gameState.players.filter(p => p.isCpu).forEach(cpu => {
       let validTargets = [];
-
       if (cpu.isThief) {
         validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
       } else {
         let thief = gameState.players.find(p => p.isThief);
         let cpuSawCheeseGone = (cpu.dice >= thief.dice); 
-
         validTargets = gameState.players.filter(p => {
           if (p.id === cpu.id || !p.connected) return false;
-          if (cpuSawCheeseGone) {
-            return p.dice <= cpu.dice;
-          } else {
-            return p.dice > cpu.dice;
-          }
+          return cpuSawCheeseGone ? (p.dice <= cpu.dice) : (p.dice > cpu.dice);
         });
       }
-
-      if (validTargets.length === 0) {
-        validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
-      }
-
+      if (validTargets.length === 0) validTargets = gameState.players.filter(p => p.id !== cpu.id && p.connected);
       if (validTargets.length > 0) {
         let randTarget = validTargets[Math.floor(Math.random() * validTargets.length)];
         randTarget.votes++;
       }
     });
 
-    gameState.phase = 'result';
+    gameState.phase = 'cheese_result';
     broadcastState();
   }
-  
+
+  // ==================== シティチェイスの処理 ====================
+  function hostStartCityChaseGame() {
+    gameState.phase = 'city_game';
+    let c = gameState.city;
+    c.turn = 1;
+    c.winner = null;
+    c.logs = ["🎮 シティチェイスが開始されました！"];
+    c.liftedBuildings = [];
+    c.policePos = { x: 2, y: 2 }; // 中央からスタート
+    
+    // 犯人の初期配置（警察と離れたランダム位置）
+    let rx, ry;
+    do {
+      rx = Math.floor(Math.random() * 5);
+      ry = Math.floor(Math.random() * 5);
+    } while (Math.abs(rx - c.policePos.x) <= 1 && Math.abs(ry - c.policePos.y) <= 1);
+    c.thiefPos = { x: rx, y: ry };
+    
+    c.turnPhase = 'thief_move';
+    c.logs.push("ターン1: 🚗 犯人の移動フェーズです。");
+    
+    broadcastState();
+
+    // CPUが犯人の場合の自動初手
+    if (c.isCpuOpponent && c.hostRole === 'police') {
+      setTimeout(cpuThiefMove, 1000);
+    }
+  }
+
+  function isAdjacent(pos1, pos2) {
+    let dx = Math.abs(pos1.x - pos2.x);
+    let dy = Math.abs(pos1.y - pos2.y);
+    return (dx + dy === 1);
+  }
+
+  function handleCityAction(action, payload) {
+    let c = gameState.city;
+    if (c.winner) return;
+
+    if (action === 'thief_move') {
+      c.thiefPos = { x: payload.x, y: payload.y };
+      c.liftedBuildings = []; // ビルを元に戻す
+      c.turnPhase = 'police_move';
+      c.logs.push(`🚗 犯人が移動しました。🚁 警察の移動フェーズです。`);
+      broadcastState();
+
+      if (c.isCpuOpponent && c.hostRole === 'thief') {
+        setTimeout(cpuPoliceTurn, 1000);
+      }
+    } else if (action === 'police_move') {
+      c.policePos = { x: payload.x, y: payload.y };
+      c.turnPhase = 'police_search';
+      c.logs.push(`🚁 警察が (${payload.x+1}, ${payload.y+1}) へ移動。ビルの捜索フェーズです。`);
+      broadcastState();
+
+      if (c.isCpuOpponent && c.hostRole === 'thief') {
+        setTimeout(cpuPoliceSearch, 1000);
+      }
+    } else if (action === 'police_search') {
+      let bx = payload.x;
+      let by = payload.y;
+      if (!c.liftedBuildings.some(b => b.x === bx && b.y === by)) {
+        c.liftedBuildings.push({ x: bx, y: by });
+      }
+
+      // 車を発見したか判定
+      if (c.thiefPos.x === bx && c.thiefPos.y === by) {
+        c.winner = 'police';
+        c.turnPhase = 'ended';
+        c.logs.push(`🚨 発見！ビル (${bx+1}, ${by+1}) の下から車が見つかりました！警察の勝利！`);
+        playCatchSound();
+        speak("犯人逮捕！警察の勝利です！");
+      } else {
+        playTick();
+        c.logs.push(`🏢 (${bx+1}, ${by+1}) に車はありませんでした。`);
+      }
+      broadcastState();
+    } else if (action === 'police_end_turn') {
+      if (c.winner) return;
+      c.turn++;
+      if (c.turn > c.maxTurns) {
+        c.winner = 'thief';
+        c.turnPhase = 'ended';
+        c.logs.push(`💨 10ターン逃げ切りました！犯人の逃走成功です！`);
+        speak("逃走成功！犯人の勝利です！");
+      } else {
+        c.turnPhase = 'thief_move';
+        c.logs.push(`--- ターン ${c.turn} --- 🚗 犯人の移動フェーズ`);
+      }
+      broadcastState();
+
+      if (c.isCpuOpponent && c.hostRole === 'police' && !c.winner) {
+        setTimeout(cpuThiefMove, 1000);
+      }
+    }
+  }
+
+  // --- CPU AIロジック ---
+  function cpuThiefMove() {
+    let c = gameState.city;
+    if (c.turnPhase !== 'thief_move') return;
+    
+    let dirs = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}, {x:0,y:0}];
+    let candidates = [];
+    dirs.forEach(d => {
+      let nx = c.thiefPos.x + d.x;
+      let ny = c.thiefPos.y + d.y;
+      if (nx >= 0 && nx < 5 && ny >= 0 && ny < 5) {
+        candidates.push({ x: nx, y: ny });
+      }
+    });
+    // 警察から最も遠ざかるマスを選択
+    candidates.sort((a, b) => {
+      let distA = Math.abs(a.x - c.policePos.x) + Math.abs(a.y - c.policePos.y);
+      let distB = Math.abs(b.x - c.policePos.x) + Math.abs(b.y - c.policePos.y);
+      return distB - distA;
+    });
+    let best = candidates[0];
+    handleCityAction('thief_move', best);
+  }
+
+  function cpuPoliceTurn() {
+    let c = gameState.city;
+    let dirs = [{x:0,y:1}, {x:0,y:-1}, {x:1,y:0}, {x:-1,y:0}, {x:0,y:0}];
+    let candidates = [];
+    dirs.forEach(d => {
+      let nx = c.policePos.x + d.x;
+      let ny = c.policePos.y + d.y;
+      if (nx >= 0 && nx < 5 && ny >= 0 && ny < 5) {
+        candidates.push({ x: nx, y: ny });
+      }
+    });
+    let chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    handleCityAction('police_move', chosen);
+  }
+
+  function cpuPoliceSearch() {
+    let c = gameState.city;
+    let searchable = [];
+    for(let dx=-1; dx<=1; dx++) {
+      for(let dy=-1; dy<=1; dy++) {
+        let nx = c.policePos.x + dx;
+        let ny = c.policePos.y + dy;
+        if(nx>=0 && nx<5 && ny>=0 && ny<5) {
+          searchable.push({x:nx, y:ny});
+        }
+      }
+    }
+    // 1~2箇所ランダムで捜索
+    let target = searchable[Math.floor(Math.random() * searchable.length)];
+    handleCityAction('police_search', target);
+    setTimeout(() => {
+      handleCityAction('police_end_turn', {});
+    }, 1000);
+  }
+
+  // クライアント操作用ラッパー
+  function sendCityAction(action, payload) {
+    if (isHost) {
+      handleCityAction(action, payload);
+    } else {
+      conn.send({ type: 'city_action', action: action, payload: payload });
+    }
+  }
+
+  function cityThiefStay() {
+    let c = gameState.city;
+    sendCityAction('thief_move', { x: c.thiefPos.x, y: c.thiefPos.y });
+  }
+
+  function cityPoliceFinishSearch() {
+    sendCityAction('police_end_turn', {});
+  }
+
   function hostRestartLobby() {
     clearTimeout(nightTimer);
+    clearInterval(localCountdownTimer);
     gameState.phase = 'lobby';
     gameState.players = gameState.players.filter(p => !p.isCpu);
     gameState.players.forEach(p => { p.dice=0; p.votes=0; p.isThief=false; });
@@ -540,7 +842,7 @@
           gameState = data.state;
           updateUIFromState(gameState);
         } else if (data.type === 'peek_result') {
-          document.getElementById('peek-result').innerHTML = `🤫 出目は「<span style="font-size:1.5rem">${data.dice}時</span>」です。`;
+          document.getElementById('peek-result').innerHTML = `🤫 出目は「<span style="font-size:1.4rem">${data.dice}時</span>」です。`;
         }
       });
       conn.on('close', () => {
@@ -553,11 +855,10 @@
   function sendPeekRequest(targetName) {
     if(isHost) {
       let t = gameState.players.find(p => p.name === targetName);
-      document.getElementById('peek-result').innerHTML = `🤫 出目は「<span style="font-size:1.5rem">${t.dice}時</span>」です。`;
+      document.getElementById('peek-result').innerHTML = `🤫 出目は「<span style="font-size:1.4rem">${t.dice}時</span>」です。`;
     } else {
       conn.send({ type: 'peek', targetName: targetName });
     }
-    
     let peekBtns = document.getElementById('peek-buttons');
     peekBtns.style.pointerEvents = 'none';
     peekBtns.style.opacity = '0.5';
@@ -566,14 +867,12 @@
   function submitVote() {
     let target = document.getElementById('vote-target').value;
     if(!target) return alert("投票先を選んでください");
-    
     if(isHost) {
       let t = gameState.players.find(p => p.name === target);
       if(t) t.votes++;
     } else {
       conn.send({ type: 'vote', targetName: target });
     }
-    
     document.getElementById('submit-vote-btn').style.display = 'none';
     document.getElementById('vote-target').disabled = true;
     document.getElementById('vote-status').style.display = 'block';
@@ -581,21 +880,28 @@
 
   // === 共通 UI更新ロジック ===
   function updateUIFromState(state) {
+    // タイトル更新
+    document.getElementById('main-title').textContent = 
+      state.selectedGame === 'cheese' ? '🧀 チーズは誰が食べた？' : '🚁 シティチェイス';
+
     if(state.phase === 'lobby') {
       showView('view-lobby');
       updateLobbyUI();
-    } else if (state.phase === 'check') {
-      showView('view-check');
+    } else if (state.phase === 'cheese_check') {
+      showView('view-cheese-check');
       updateCheckUI();
-    } else if (state.phase === 'night') {
-      showView('view-night');
+    } else if (state.phase === 'cheese_night') {
+      showView('view-cheese-night');
       updateNightUI();
-    } else if (state.phase === 'day') {
-      showView('view-day');
+    } else if (state.phase === 'cheese_day') {
+      showView('view-cheese-day');
       updateDayUI();
-    } else if (state.phase === 'result') {
-      showView('view-result');
+    } else if (state.phase === 'cheese_result') {
+      showView('view-cheese-result');
       updateResultUI();
+    } else if (state.phase === 'city_game') {
+      showView('view-city-game');
+      updateCityUI();
     }
   }
 
@@ -610,12 +916,28 @@
       }
     });
     document.getElementById('player-count').textContent = count;
+
+    // ゲーム選択タブのスタイル
+    document.getElementById('select-game-cheese').className = 
+      'game-select-btn ' + (gameState.selectedGame === 'cheese' ? 'active' : '');
+    document.getElementById('select-game-city').className = 
+      'game-select-btn ' + (gameState.selectedGame === 'city' ? 'active' : '');
+
+    // オプション切り替え
+    document.getElementById('opt-cheese').style.display = gameState.selectedGame === 'cheese' ? 'block' : 'none';
+    document.getElementById('opt-city').style.display = gameState.selectedGame === 'city' ? 'block' : 'none';
+    
+    let desc = document.getElementById('game-desc-display');
+    if (gameState.selectedGame === 'cheese') {
+      desc.textContent = "🧀 誰がチーズを食べたかを当てる正体隠匿系ダイスゲーム (2〜8人)";
+    } else {
+      desc.textContent = "🚁 ヘリコプターと逃走車のビル街かくれんぼ・推理鬼ごっこ (1〜2人)";
+    }
   }
 
   function updateCheckUI() {
     let me = gameState.players.find(p => p.name === myName);
     if(!me) return;
-    
     let roleEl = document.getElementById('my-role-display');
     if(me.isThief) {
       roleEl.innerHTML = '<span style="color:var(--danger)">🧀 チーズ泥棒 (犯人)</span>';
@@ -629,13 +951,11 @@
 
   function updateNightUI() {
     let me = gameState.players.find(p => p.name === myName);
-    
     document.getElementById('night-clock-display').textContent = gameState.nightHour + ":00";
     let statusText = document.getElementById('night-status-text');
     let secretUi = document.getElementById('night-secret-ui');
     let countdownEl = document.getElementById('night-countdown');
     
-    // カウントダウンタイマーのリセット
     clearInterval(localCountdownTimer);
     countdownEl.textContent = '';
     
@@ -647,8 +967,6 @@
 
     if (gameState.nightStep === 'awake') {
       statusText.innerHTML = `<strong style="color:var(--accent)">${gameState.nightHour}時の人</strong>、目を開けてください。`;
-      
-      // ★カウントダウンの開始処理
       if (gameState.awakeEndTime) {
         const updateTimer = () => {
           let remain = Math.max(0, Math.ceil((gameState.awakeEndTime - Date.now()) / 1000));
@@ -658,19 +976,16 @@
             clearInterval(localCountdownTimer);
           }
         };
-        updateTimer(); // 即時反映
-        localCountdownTimer = setInterval(updateTimer, 500); // 0.5秒おきにチェック
+        updateTimer();
+        localCountdownTimer = setInterval(updateTimer, 500);
       }
       
       if(me && me.dice === gameState.nightHour) {
         secretUi.style.display = 'block';
-        
         let cheeseEl = document.getElementById('cheese-status-display');
-        if(gameState.cheeseEaten) {
-          cheeseEl.innerHTML = '<span style="color:var(--danger);">❌ チーズは盗まれました</span>';
-        } else {
-          cheeseEl.innerHTML = '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
-        }
+        cheeseEl.innerHTML = gameState.cheeseEaten ? 
+          '<span style="color:var(--danger);">❌ チーズは盗まれました</span>' : 
+          '<span style="color:var(--success);">🧀 チーズはまだあります</span>';
         
         let awakePlayers = gameState.players.filter(p => p.dice === gameState.nightHour && p.connected);
         let compEl = document.getElementById('companions-display');
@@ -678,7 +993,7 @@
         
         if(awakePlayers.length > 1) {
           peekEl.style.display = 'none';
-          let html = '<div style="color:var(--success); margin-bottom:8px;"><strong>【一緒に起きている仲間】</strong></div>';
+          let html = '<div style="color:var(--success); margin-bottom:6px;"><strong>【一緒に起きている仲間】</strong></div>';
           awakePlayers.forEach(p => {
             let r = p.isThief ? '<span style="color:var(--danger)">泥棒</span>' : 'ネズミ';
             html += `<div>・${p.name} (${r})</div>`;
@@ -687,7 +1002,6 @@
         } else {
           compEl.innerHTML = '';
           peekEl.style.display = 'block';
-          
           let peekBtns = document.getElementById('peek-buttons');
           peekBtns.innerHTML = '';
           peekBtns.style.pointerEvents = 'auto';
@@ -702,11 +1016,9 @@
       } else {
         secretUi.style.display = 'none';
       }
-      
     } else if (gameState.nightStep === 'close') {
       statusText.textContent = `${gameState.nightHour}時の人、目を閉じてください。`;
       secretUi.style.display = 'none';
-      
       document.getElementById('peek-result').innerHTML = '';
       let peekBtns = document.getElementById('peek-buttons');
       if(peekBtns) {
@@ -718,11 +1030,7 @@
 
   function updateDayUI() {
     let msgEl = document.getElementById('day-cheese-msg');
-    if(gameState.cheeseEaten) {
-      msgEl.innerHTML = '🧀 チーズが無くなっています！';
-    } else {
-      msgEl.innerHTML = '✨ 誰も起きなかったため、チーズは残っています！';
-    }
+    msgEl.innerHTML = gameState.cheeseEaten ? '🧀 チーズが無くなっています！' : '✨ 誰も起きなかったため、チーズは残っています！';
     
     let sel = document.getElementById('vote-target');
     if(sel.options.length <= 1) {
@@ -731,7 +1039,6 @@
         if(p.connected) sel.innerHTML += `<option value="${p.name}">${p.name}</option>`;
       });
     }
-    
     document.getElementById('submit-vote-btn').style.display = 'block';
     document.getElementById('vote-target').disabled = false;
     document.getElementById('vote-status').style.display = 'none';
@@ -762,12 +1069,155 @@
     gameState.players.forEach(p => {
       if(!p.connected) return;
       let r = p.isThief ? '<strong style="color:var(--danger)">[泥棒]</strong>' : '<span style="color:var(--text-muted)">[ネズミ]</span>';
-      let isCpu = p.isCpu ? '<span style="font-size:0.8rem; color:var(--info);">[CPU]</span>' : '';
-      list.innerHTML += `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #475569; padding:8px 0;">
+      let isCpu = p.isCpu ? '<span style="font-size:0.75rem; color:var(--info);">[CPU]</span>' : '';
+      list.innerHTML += `<div style="display:flex; justify-content:space-between; border-bottom:1px solid #475569; padding:6px 0;">
         <span>${p.name} ${isCpu} ${r}</span>
         <span>${p.dice}時 / <strong>${p.votes}票</strong></span>
       </div>`;
     });
+  }
+
+  // === シティチェイス UI 更新 ===
+  function updateCityUI() {
+    let c = gameState.city;
+    document.getElementById('city-turn-count').textContent = c.turn;
+    
+    // 自分の役割の判定
+    let myRole = 'police';
+    if (isHost) {
+      myRole = c.hostRole;
+    } else {
+      myRole = (c.hostRole === 'police') ? 'thief' : 'police';
+    }
+    
+    document.getElementById('city-my-role').innerHTML = 
+      (myRole === 'police') ? '<span style="color:var(--info)">🚁 警察 (ヘリ)</span>' : '<span style="color:var(--accent)">🚗 犯人 (逃走車)</span>';
+
+    // 行動メッセージ
+    let actionMsg = document.getElementById('city-action-msg');
+    let policeControls = document.getElementById('city-police-controls');
+    let thiefControls = document.getElementById('city-thief-controls');
+    let endTurnBtn = document.getElementById('city-end-turn-btn');
+    
+    policeControls.style.display = 'none';
+    thiefControls.style.display = 'none';
+    endTurnBtn.style.display = 'none';
+
+    if (c.winner) {
+      actionMsg.innerHTML = (c.winner === 'police') ? 
+        '<span style="color:var(--success)">🚨 警察の勝利！（犯人を逮捕しました）</span>' : 
+        '<span style="color:var(--accent)">💨 犯人の勝利！（10ターン逃走成功）</span>';
+      document.getElementById('host-city-end-ui').style.display = isHost ? 'block' : 'none';
+    } else if (c.turnPhase === 'thief_move') {
+      if (myRole === 'thief') {
+        actionMsg.textContent = "👉 あなたのターン：隣のマスへ移動または潜伏してください";
+        thiefControls.style.display = 'block';
+      } else {
+        actionMsg.textContent = "⏳ 犯人が逃走経路を考えています...";
+      }
+    } else if (c.turnPhase === 'police_move') {
+      if (myRole === 'police') {
+        actionMsg.textContent = "👉 ヘリコプターを隣接マス（またはその場）へ移動させてください";
+      } else {
+        actionMsg.textContent = "⏳ 警察のヘリコプターが移動しています...";
+      }
+    } else if (c.turnPhase === 'police_search') {
+      if (myRole === 'police') {
+        actionMsg.textContent = "👉 ヘリの周囲のビルをタップして持ち上げてください";
+        policeControls.style.display = 'block';
+        endTurnBtn.style.display = 'block';
+      } else {
+        actionMsg.textContent = "⏳ 警察がビルを捜索しています...";
+      }
+    }
+
+    // ログ更新
+    let logEl = document.getElementById('city-log');
+    logEl.innerHTML = c.logs.slice(-4).join('<br>');
+    logEl.scrollTop = logEl.scrollHeight;
+
+    // 5x5 ボード描画
+    renderCityBoard(myRole);
+  }
+
+  function renderCityBoard(myRole) {
+    let c = gameState.city;
+    let board = document.getElementById('city-board');
+    board.innerHTML = '';
+
+    for(let y=0; y<5; y++) {
+      for(let x=0; x<5; x++) {
+        let cell = document.createElement('div');
+        cell.className = 'grid-cell';
+
+        let isHeli = (c.policePos.x === x && c.policePos.y === y);
+        let isCar = (c.thiefPos.x === x && c.thiefPos.y === y);
+        let isLifted = c.liftedBuildings.some(b => b.x === x && b.y === y);
+
+        // 警察移動可能なマス
+        let isPoliceMoveTarget = false;
+        if (!c.winner && c.turnPhase === 'police_move' && myRole === 'police') {
+          let dist = Math.abs(c.policePos.x - x) + Math.abs(c.policePos.y - y);
+          if (dist <= 1) isPoliceMoveTarget = true;
+        }
+
+        // 犯人移動可能なマス
+        let isThiefMoveTarget = false;
+        if (!c.winner && c.turnPhase === 'thief_move' && myRole === 'thief') {
+          let dist = Math.abs(c.thiefPos.x - x) + Math.abs(c.thiefPos.y - y);
+          if (dist === 1) isThiefMoveTarget = true;
+        }
+
+        // 警察捜索可能なマス（ヘリの周囲3x3）
+        let isSearchTarget = false;
+        if (!c.winner && c.turnPhase === 'police_search' && myRole === 'police') {
+          let dx = Math.abs(c.policePos.x - x);
+          let dy = Math.abs(c.policePos.y - y);
+          if (dx <= 1 && dy <= 1 && !isLifted) isSearchTarget = true;
+        }
+
+        if (isPoliceMoveTarget || isThiefMoveTarget) cell.classList.add('highlight');
+        if (isSearchTarget) cell.classList.add('searchable');
+
+        // クリックイベント
+        cell.onclick = () => {
+          if (c.winner) return;
+          if (isThiefMoveTarget) {
+            sendCityAction('thief_move', { x: x, y: y });
+          } else if (isPoliceMoveTarget) {
+            sendCityAction('police_move', { x: x, y: y });
+          } else if (isSearchTarget) {
+            sendCityAction('police_search', { x: x, y: y });
+          }
+        };
+
+        // ビルの表示
+        let building = document.createElement('div');
+        building.className = 'building' + (isLifted ? ' lifted' : '');
+        building.textContent = '🏢';
+        cell.appendChild(building);
+
+        // 犯人の車の表示（犯人視点、またはビルが持ち上がった時、またはゲーム終了時）
+        if (isCar) {
+          if (myRole === 'thief' || isLifted || c.winner) {
+            let car = document.createElement('div');
+            car.className = 'car-icon';
+            car.textContent = '🚗';
+            cell.appendChild(car);
+          }
+        }
+
+        // ヘリコプターの表示
+        if (isHeli) {
+          let heli = document.createElement('div');
+          heli.className = 'heli-icon';
+          heli.textContent = '🚁';
+          cell.appendChild(heli);
+        }
+
+        board.appendChild(cell);
+      }
+    }
   }
 </script>
 </body>
